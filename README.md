@@ -4,7 +4,8 @@
 
 让 macOS 上的 Claude（网页版 / 桌面版 / Claude Code 全覆盖）永久走一个**固定的美国静态住宅 IP**，其余流量保持你机场订阅的原有规则不变。
 
-> **实际使用情况**：作者的两台 Mac 自 **2026-04** 起按本方案持续在用（约 3 个月），日常使用未出现账号异常。方案在这期间随踩坑不断修补，排障手册里的 10 个坑全部来自真实故障。
+> **实际使用情况**：作者按本方案**已稳定使用约一年**，跨越两台 Mac、一台 Windows 电脑，手机（iPhone）上同样在用，**期间账号零异常封禁**。
+> 仓库是 2026-04 才开始正式整理成文的，所以 git 历史比实际使用时间短。排障手册里的 10 个坑，全部来自这一年里踩过的真实故障。
 
 配置过程不用你手动改文件——由你自己的 Claude Code agent 照本仓库执行，你只需要提供凭证 + 在图形界面点一次激活。
 
@@ -19,14 +20,18 @@ Claude 服务器看到的出口 IP = 你的静态住宅 IP，永久固定。
 
 ## 平台支持
 
-| 平台 | 状态 |
-|---|---|
-| **macOS**（Apple Silicon / Intel） | ✅ **完整验证**，两台真机长期在用 |
-| Windows | ❌ 不支持。Clash Verge Rev 本身有 Windows 版，方案思路通用，但本仓库的路径、进程名、`verify.sh` 全是 macOS 专用，agent 会跑不通 |
-| Linux | ❌ 不支持（同上，且桌面版 Claude 没有 Linux 版） |
-| iPhone / iPad | ⚠️ 只有思路记录，未验证：见 `docs/iphone-notes.md` |
+**方案本身**（Clash 分流 + 链式静态住宅 IP）作者在 macOS、Windows、iPhone 上都实际跑通并长期稳定使用过。**本仓库的自动化部分**（agent 手册、`verify.sh`）是 macOS 专用——这是两件不同的事，看下表：
 
-非 macOS 或不用 Clash Verge 的，看 `docs/porting.md`——那里把方案抽象成了平台无关的规格，能自己移植但不担保。
+| 平台 | 方案可用性 | 本仓库的自动化 |
+|---|---|---|
+| **macOS**（Apple Silicon / Intel） | ✅ 长期稳定使用 | ✅ **完整支持**：agent 全自动 + `verify.sh` 六项体检 |
+| **Windows** | ✅ 作者实测跑通并稳定用过 | ❌ 需手动配置。Clash Verge Rev 有 Windows 版、思路完全一样，但配置目录、进程名不同，`verify.sh`（用了 `scutil` / `stat -f`）跑不了 |
+| **iPhone / iOS** | ✅ 作者在用（Shadowrocket 小火箭） | ❌ 手机上没有 agent。步骤暂未整理成文，**要配就问分享人**，见 `docs/iphone-notes.md` |
+| Linux | ⚠️ 未试过 | ❌ 不支持（且 Claude 桌面版没有 Linux 版） |
+
+**Windows 用户怎么办**：照 `docs/manual-setup.md` 的思路走，把三处换成 Windows 的对应物——配置目录在 `%APPDATA%` 下的同名文件夹（自己确认一下）、进程名规则里的 `Claude` / `claude.exe` 保持不动（Windows 上本来就是这个名）、`Google Chrome` 改成 `chrome.exe`；验证不能用 `verify.sh`，改成手动跑 `docs/porting.md` 里那两条命令（查 `claude.ai/cdn-cgi/trace` 的出口是不是静态 IP）。规则和模板本身照抄即可。
+
+不用 Clash Verge 的（Surge / sing-box 等），看 `docs/porting.md`——那里把方案抽象成了平台无关的规格。
 
 ## 适合谁 / 不适合谁
 
@@ -212,7 +217,7 @@ bash scripts/verify.sh
 | `scripts/verify.sh` | 一键六项验证（出口 IP、组状态、规则、漏流扫描等） |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
-| `docs/iphone-notes.md` | iPhone 侧思路（附录，未验证） |
+| `docs/iphone-notes.md` | iPhone（小火箭）能配，步骤问分享人；附一条 Mac 红线 |
 | `CHANGELOG.md` | 版本更新日志 |
 
 ---

@@ -15,7 +15,7 @@
 - `docs/account-safety.md`：账号安全清单（遥测环境变量的真实语义 + 网页版侧 5 条习惯）
 - `docs/porting.md`：非 Clash Verge 客户端的移植规格（未验证）
 - Phase -1：没装 Clash Verge 时 agent 帮装并迁移订阅；用别的代理软件的走迁移流程
-- README：平台支持表、适合谁/不适合谁、静态 IP 具体要求表、agent 流程图、`verify.sh` 示例输出
+- README：使用情况说明（约一年、跨 Mac/Windows/iPhone、账号零异常）、平台支持表（区分「方案可用性」与「本仓库自动化」，含 Windows 手动配置要点）、适合谁/不适合谁、静态 IP 具体要求表、agent 流程图、`verify.sh` 示例输出
 - `LICENSE`（MIT）、本更新日志
 
 **改进（更少的手工操作）**
