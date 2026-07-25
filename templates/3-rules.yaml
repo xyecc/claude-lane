@@ -59,6 +59,8 @@ prepend:
 
   # ── 6. 订阅付款相关也走静态 IP（避免支付风控）
   # ⚠️ 副作用：你在【任何网站】用 Stripe / Google Pay 付款都会走静态 IP，不只是 Anthropic 订阅。
+  #    另注：Claude 订阅【中国大陆发行的银行卡全部不可用】，得用海外办理的信用卡或虚拟卡；
+  #    所以这组规则对多数人没意义，只有你已经能正常付款、想让付款也走同一出口时才留。
   #    不想要就删掉本组 5 条，不影响 Claude 专线本身。
   - "DOMAIN-SUFFIX,stripe.com,Claude"
   - "DOMAIN-SUFFIX,stripecdn.com,Claude"
