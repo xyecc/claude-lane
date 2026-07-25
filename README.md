@@ -93,6 +93,7 @@ bash scripts/verify.sh
 2. Clash 保持**规则模式**，不要切"全局"或"直连"（全局模式下 Claude 专线规则全部失效）。
 3. 每次改配置后：**⌘Q 完全退出并重启** Chrome 和 Claude 桌面版（QUIC/连接有缓存）。
 4. 出问题先跑 `scripts/verify.sh`，看哪项红了，对照 `docs/troubleshooting.md` 处理。
+5. **别乱设遥测环境变量**（`DISABLE_TELEMETRY` 等），也别在网页版里多账号混用——见 `docs/account-safety.md`。专线只保证出口 IP 干净，这些坑它管不了。
 
 ## 仓库结构
 
@@ -103,6 +104,7 @@ bash scripts/verify.sh
 | `docs/porting.md` | 非 Clash Verge 客户端的移植规格（未验证，不担保） |
 | `templates/` | 4 个 Clash 增强文件模板（填空即用） |
 | `scripts/verify.sh` | 一键六项验证（出口 IP、组状态、规则、漏流扫描等） |
+| `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
 | `docs/iphone-notes.md` | iPhone 侧思路（附录，未验证） |
 
