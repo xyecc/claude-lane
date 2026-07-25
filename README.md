@@ -1,6 +1,6 @@
 # Claude 专线：让 Claude 流量走美国静态住宅 IP（agent 一键复刻版）
 
-**v1.1.0** · 仅支持 macOS · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
+**v1.1.1** · 仅支持 macOS · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
 
 让 macOS 上的 Claude（网页版 / 桌面版 / Claude Code 全覆盖）永久走一个**固定的美国静态住宅 IP**，其余流量保持你机场订阅的原有规则不变。
 
@@ -177,7 +177,7 @@ bash scripts/verify.sh
 
 **订阅付款也要走静态 IP 吗？** 默认**不走**（v1.1.0 起支付规则移到了 `templates/optional-payment-rules.yaml`，默认不启用）。两个原因：一是加了之后你在**任何网站**用 Stripe / Google Pay 付款都会走静态 IP，会稀释"这个 IP 只访问 Anthropic"的画像；二是 Claude 订阅**中国大陆发行的卡全部不可用**（借记、信用卡都不行），只能用海外办理的信用卡或虚拟卡——卡本身不行的话，改 IP 也没用。确有需要再照那个模板追加。
 
-**配砸了怎么恢复？** `bash scripts/rollback.sh` 回滚**最近一次**部署（`--list` 看所有备份点）。每次部署的备份都在自己的时间戳目录里，回滚只碰这一次的改动，不会把你几个月前的配置也翻出来。
+**配砸了怎么恢复？** `bash scripts/rollback.sh --list` 看备份点，`bash scripts/rollback.sh [id]` 回滚（不给 id 就回滚最近一次）。一次部署的所有改动共用一个备份点，回滚会还原被改的文件、并删掉这次新建的文件，不会把你几个月前的配置翻出来。
 
 **多台设备能共用同一个静态 IP 吗？** 能，而且推荐——"同一个住宅 IP 上有个人在多台设备用 Claude"本身就是很正常的画像，比每台机器一个 IP 更自然。带宽也够（Claude 流量很小）。注意：**每台机器都要各自部署一遍**（配置是写在本机 Clash 里的），而且模板升级后每台都要重新对齐（见排障手册第 10 条）。
 
@@ -226,7 +226,8 @@ bash scripts/verify.sh
 | `templates/` | 4 个 Clash 增强文件模板（填空即用） |
 | `scripts/verify.sh` | 一键六项验证（`--save-baseline` 记录出口基线） |
 | `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
-| `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚最近一次部署 |
+| `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚某次部署（新建的文件会被删除） |
+| `scripts/selftest.sh` | 烟雾测试（沙箱跑，改脚本后先跑它） |
 | `templates/optional-payment-rules.yaml` | 可选：让订阅付款也走静态 IP（默认不启用） |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |

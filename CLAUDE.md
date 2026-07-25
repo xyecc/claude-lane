@@ -9,7 +9,13 @@
 - Clash Verge Rev 配置目录：`$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev`（下文记作 `$CFG`）
 - Mihomo 控制 API 走 unix socket：`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/<endpoint>`（若 socket 不存在，读 `$CFG/clash-verge.yaml` 里的 `external-controller` 换 TCP 方式）
 - 内核日志：`$CFG/logs/service/service_latest.log`
-- **所有写文件操作前，先用 `bash scripts/backup.sh <文件...>` 备份**（它会建一个独立的时间戳目录并返回路径）。把返回的路径记下来告诉用户，出事用 `bash scripts/rollback.sh` 回滚
+- **一次部署共用一个 deployment id**：进入 Phase 2 之前先定一个（`date +%Y%m%d-%H%M%S` 的值），**之后每次调用 `backup.sh` 都带上它**，这样整次部署的改动都落进同一个备份点、能被一次性回滚：
+  ```bash
+  export CLAUDE_LANE_DEPLOY_ID=$(date +%Y%m%d-%H%M%S)   # 本次部署固定用这个
+  bash scripts/backup.sh <要改的文件...>                 # 可多次调用，都进同一个目录
+  ```
+  记得把这个 id 告诉用户（出事就 `bash scripts/rollback.sh <id>`）。让用户跑 `set-credentials.sh` 之前，也要请他在同一个终端先 `export` 这个变量，否则凭证那步会单独生成一个备份点
+- **备份清单要覆盖全部会被动到的文件**：四个增强文件 + `$CFG/profiles.yaml`（自动创建增强文件时会改它）。**还不存在的文件也照样传给 `backup.sh`**——它会记成 `created`，回滚时直接删除，不会留下孤儿文件
 - **绝不索要、绝不接收用户的静态 IP 凭证**。四元组由用户自己跑 `scripts/set-credentials.sh` 写入本机（隐藏输入），你只会看到打码后的确认信息。凭证绝不进入对话、绝不写进本仓库目录、绝不出现在 git 里
 
 ---
@@ -49,7 +55,7 @@ STOP 条件：Clash 没装/没跑 → 回 Phase -1 处理；订阅里没有美�
 1. **凭证：让用户自己写入，你不要接手。** 原话告诉用户：
 
    > 请你在终端自己跑一次（在 Claude Code 里可以直接输入下面这行，前面的感叹号会在本会话执行）：
-   > `! bash scripts/set-credentials.sh`
+   > `! export CLAUDE_LANE_DEPLOY_ID=<本次部署id> && bash scripts/set-credentials.sh`
    > 它会隐藏输入你的密码、直接写进本机 Clash 配置。**别把四元组贴进对话**——贴进来就等于发到模型服务端并留在本机会话记录里。
 
    脚本跑完用户会得到一段打码信息（节点名、主机前几位、端口、备份目录），让他贴给你即可。
@@ -76,10 +82,13 @@ STOP 条件：Clash 没装/没跑 → 回 Phase -1 处理；订阅里没有美�
 
 ## Phase 3：写入配置（模板填空）
 
-**先备份**（一条命令备份本次要改的所有文件，记住返回的目录）：
+**先备份**（带上本次的 deployment id；`profiles.yaml` 也要备，不存在的文件照传）：
 
 ```bash
-bash scripts/backup.sh "$CFG/profiles/<proxies uid>.yaml" "$CFG/profiles/<groups uid>.yaml" "$CFG/profiles/<rules uid>.yaml" "$CFG/profiles/<merge uid>.yaml"
+export CLAUDE_LANE_DEPLOY_ID=${CLAUDE_LANE_DEPLOY_ID:-$(date +%Y%m%d-%H%M%S)}
+bash scripts/backup.sh "$CFG/profiles.yaml" \
+  "$CFG/profiles/<proxies uid>.yaml" "$CFG/profiles/<groups uid>.yaml" \
+  "$CFG/profiles/<rules uid>.yaml" "$CFG/profiles/<merge uid>.yaml"
 ```
 
 然后按 `templates/` 下的模板写入对应 uid 文件（若原文件已有用户自己的增强内容，合并而不是覆盖，冲突处问用户；我们自己写的内容尽量包在 `# claude-lane managed start/end` 之间，方便以后只替换这一段）：
@@ -133,15 +142,20 @@ bash scripts/verify.sh --save-baseline
 本次部署改过的文件都在 `scripts/backup.sh` 建的那个独立目录里，一条命令回滚：
 
 ```bash
-bash scripts/rollback.sh            # 回滚【最近一次】部署
-bash scripts/rollback.sh --list     # 先看有哪些备份点
+bash scripts/rollback.sh --list          # 先看有哪些备份点（显示各点要还原/删除几个文件）
+bash scripts/rollback.sh <deployment id> # 回滚指定那次部署（推荐：用你在 Phase 2 定的 id）
+bash scripts/rollback.sh                 # 不给 id 就回滚【最近一次】
 ```
 
-脚本会列出要还原的文件、要你确认、并在还原前把当前状态也存一份（回滚本身可后悔）。还原完按它的提示让用户在 GUI 点一次订阅卡片重新激活，然后确认两件事：内核正常（`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 有返回）、正常上网没坏。
+脚本会列出本次要**还原**哪些文件、**删除**哪些本次新建的文件，等你确认；还原前它会把当前状态也存一份（回滚本身可后悔）。还原完按它的提示让用户在 GUI 点一次订阅卡片重新激活，然后确认两件事：内核正常（`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 有返回）、正常上网没坏。
 
 ⚠️ 别再用「找最早的 .bak 文件复制回去」那套老做法——部署过几次之后，最早那份可能是几个月前的状态，会恢复过头。
 
 回滚完成后，如实告诉用户卡在哪个阶段、日志里的相关报错行，由用户决定重试还是先排障，**不要回滚完立刻自动重试**。
+
+## 改动了 scripts/ 里的脚本？
+
+先跑烟雾测试再交付：`bash scripts/selftest.sh`（在临时目录造假配置，覆盖全新空文件、特殊字符凭证、重复运行、冲突拒绝、回滚删除新建文件等场景，不碰真实配置）。v1.1.0 有三个 bug 就是因为只在"老配置 + 简单密码"上测过。
 
 ## 完成标准
 

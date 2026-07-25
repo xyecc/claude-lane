@@ -128,18 +128,22 @@ PY
 echo "[4/6] 出口双验（关键）"
 # 先探本地代理端口；不通时直接给原因，跳过双验避免误报成"出口错误"
 if ! curl -sS --max-time 8 --proxy "$PROXY" -o /dev/null https://api.ipify.org 2>/dev/null; then
-  bad "本地代理端口不通（$PROXY），跳过出口双验"
+  bad "本地代理端口不通（${PROXY}），跳过出口双验"
   note "确认 Verge 设置→端口 里开启的端口类型和号码；本脚本按 mixed-port > port > socks-port 顺序自动发现"
 else
   TRACE=$(curl -sS --max-time 25 --proxy "$PROXY" https://claude.ai/cdn-cgi/trace 2>/dev/null)
   TRACE_IP=$(printf '%s' "$TRACE" | grep '^ip=' | cut -d= -f2 | tr -d '\r ')
   TRACE_LOC=$(printf '%s' "$TRACE" | grep '^loc=' | cut -d= -f2 | tr -d '\r ')
-  # 基线优先：跟【上次部署实测到的真实出口】比。没有基线才退回跟配置里的服务器地址比
-  # （服务商的入口地址不一定等于最终住宅出口 IP，只比那个可能误报，也发现不了出口悄悄换了）
+  NORM_IP=$(curl -sS --max-time 15 --proxy "$PROXY" https://api.ipify.org 2>/dev/null | tr -d '\r ')
   BASE_IP=$(python3 -c "
 import json,sys
 try: print(json.load(open('$STATE')).get('claude_exit_ip',''))
 except Exception: print('')" 2>/dev/null)
+
+  # 有基线：跟【上次实测到的真实出口】比，能发现出口悄悄变了
+  # 无基线（首次）：**不要求**出口等于配置里的服务器地址——服务商的入口地址常常不等于最终住宅出口 IP，
+  #                 那样判会让这类用户永远建立不了基线（v1.1.0 的死锁 bug）。首次只验三件事：
+  #                 出口拿得到、国家是 US、且与普通流量出口不同（证明确实走了专线）。
   if [ -n "$BASE_IP" ]; then
     if [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$BASE_IP" ]; then
       ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 与基线一致"
@@ -147,20 +151,30 @@ except Exception: print('')" 2>/dev/null)
       bad "claude.ai 出口变了：现在 ${TRACE_IP:-请求失败} (${TRACE_LOC:-?})，基线是 ${BASE_IP}"
       note "静态 IP 换了/到期了？确认无误后用 bash scripts/verify.sh --save-baseline 更新基线"
     fi
-  elif [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$STATIC_IP" ]; then
-    ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 静态IP, 正确"
-    note "尚未记录出口基线，建议跑一次：bash scripts/verify.sh --save-baseline"
+  elif [ -z "$TRACE_IP" ]; then
+    bad "拿不到 claude.ai 的出口 IP（链路不通？先看第 1、2 项）"
+  elif [ -n "$NORM_IP" ] && [ "$TRACE_IP" = "$NORM_IP" ]; then
+    bad "Claude 出口和普通流量出口相同（${TRACE_IP}）—— 说明 Claude 流量没走专线"
   else
-    bad "claude.ai 出口 = ${TRACE_IP:-请求失败}, 应为 ${STATIC_IP}"
+    ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 与普通流量分离, 正常"
+    if [ -n "$STATIC_IP" ] && [ "$TRACE_IP" != "$STATIC_IP" ]; then
+      note "出口 ${TRACE_IP} 与配置里的服务器地址 ${STATIC_IP} 不同——这很正常（服务商入口≠住宅出口）"
+    fi
+    note "尚未记录出口基线，跑一次记下来：bash scripts/verify.sh --save-baseline"
   fi
+
   if [ -n "$TRACE_LOC" ] && [ "$TRACE_LOC" != "US" ]; then
     bad "出口国家是 ${TRACE_LOC}，不是 US（静态 IP 被回收换区了？）"
   fi
-  NORM_IP=$(curl -sS --max-time 15 --proxy "$PROXY" https://api.ipify.org 2>/dev/null | tr -d '\r ')
-  if [ -n "$NORM_IP" ] && [ "$NORM_IP" != "$STATIC_IP" ]; then
-    ok "普通流量出口 = ${NORM_IP} <- 机场节点, 未误走静态"
+
+  # 普通流量必须与【Claude 的真实出口】不同（不是与配置里的服务器地址比）
+  EXPECT_EXIT="${BASE_IP:-$TRACE_IP}"
+  if [ -z "$NORM_IP" ]; then
+    bad "普通流量出口请求失败"
+  elif [ -n "$EXPECT_EXIT" ] && [ "$NORM_IP" = "$EXPECT_EXIT" ]; then
+    bad "普通流量出口 = ${NORM_IP}，与 Claude 出口相同（有组误选了静态节点，见第 2 项）"
   else
-    bad "普通流量出口异常 = ${NORM_IP:-请求失败} (等于静态IP说明有组误选, 见第2项)"
+    ok "普通流量出口 = ${NORM_IP} <- 机场节点, 未误走静态"
   fi
 fi
 
