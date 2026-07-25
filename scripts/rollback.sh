@@ -21,7 +21,11 @@ if [ "${1:-}" = "--list" ]; then
     [ -f "$man" ] || continue
     f=$(grep -cE '^file' "$man" 2>/dev/null || true)
     c=$(grep -cE '^created' "$man" 2>/dev/null || true)
-    printf '  %s   还原 %s 个文件 / 删除 %s 个新建文件\n' "$d" "${f:-0}" "${c:-0}"
+    case "$d" in
+      prerollback-*) tag="  ← 回滚快照（用它可撤销那次回滚）" ;;
+      *)             tag="" ;;
+    esac
+    printf '  %s   还原 %s 个文件 / 删除 %s 个新建文件%s\n' "$d" "${f:-0}" "${c:-0}" "$tag"
   done
   exit 0
 fi
@@ -35,7 +39,10 @@ for a in "$@"; do
     *) TARGET="$a" ;;
   esac
 done
-[ -n "$TARGET" ] || TARGET=$(ls -1r "$ROOT" | head -1)
+# 不给 id 时默认回滚【最近一次部署】，不会误选回滚快照（prerollback-* 排序时会排在数字前面）。
+# 要撤销上一次回滚，请显式传那个 prerollback-* 的 id（回滚结束时会打印出来）。
+[ -n "$TARGET" ] || TARGET=$(ls -1r "$ROOT" | grep -v '^prerollback-' | head -1)
+[ -n "$TARGET" ] || { echo "没有可回滚的部署备份点（只有回滚快照的话请显式指定 id，--list 可查看）"; exit 1; }
 
 DIR="$ROOT/$TARGET"
 MAN="$DIR/manifest.tsv"
@@ -50,16 +57,33 @@ if [ "$ASSUME_YES" != "1" ]; then
   case "$ans" in [yY]*) ;; *) echo "已取消"; exit 0;; esac
 fi
 
-# 还原前把「当前状态」也存一份，让回滚本身也可后悔
-SAFETY="$ROOT/prerollback-$(date +%Y%m%d-%H%M%S)"
+# 还原前把「当前状态」也存一份，让回滚本身也可后悔。
+#
+# 两个关键点（v1.2.0 这里都错过）：
+# ① 记录的 kind 必须反映【当前】状态，不能照抄原清单：
+#    当前文件在 → file（存副本，撤销回滚时还原）；当前文件不在 → created（撤销回滚时删除）。
+#    照抄原清单的话，部署新建的那些文件会被记成 created，撤销回滚时不但不还原，反而再删一次。
+# ② 目录名不能只用秒级时间戳：紧接着撤销刚才的回滚时会和 TARGET 撞名，
+#    一旦撞名就成了「边读 manifest.tsv 边往同一个文件追加」→ 无限循环。用 mktemp 保证唯一。
+SAFETY=$(mktemp -d "$ROOT/prerollback-$(date +%Y%m%d-%H%M%S)-XXXXXX")
 mkdir -p "$SAFETY/files"
 cp "$MAN" "$SAFETY/manifest-source.tsv"
+{
+  printf '# claude-lane 回滚快照（撤销回滚用）\n'
+  printf 'snapshot_of\t%s\n' "$TARGET"
+  printf 'created_at\t%s\n' "$(date '+%F %T')"
+} > "$SAFETY/manifest.tsv"
+
 i=0
 while IFS=$'\t' read -r kind idx path; do
   case "$kind" in file|created) ;; *) continue ;; esac
-  i=$((i+1))
-  [ -f "$path" ] && cp -p "$path" "$SAFETY/files/$i" || true
-  printf '%s\t%s\t%s\n' "$kind" "$i" "$path" >> "$SAFETY/manifest.tsv"
+  if [ -f "$path" ]; then
+    i=$((i+1))
+    cp -p "$path" "$SAFETY/files/$i"
+    printf 'file\t%s\t%s\n' "$i" "$path" >> "$SAFETY/manifest.tsv"
+  else
+    printf 'created\t-\t%s\n' "$path" >> "$SAFETY/manifest.tsv"
+  fi
 done < "$MAN"
 
 # 执行还原 / 删除
@@ -82,7 +106,9 @@ done < "$MAN"
 
 cat <<EOF
 
-文件已处理完（回滚前的状态存在 ${SAFETY} ，后悔了可以从那里再取回来）。
+文件已处理完。回滚前的状态已快照，**这次回滚也能撤销**：
+
+  bash scripts/rollback.sh $(basename "$SAFETY")
 
 接下来必须让配置重新生效，二选一：
   ① 打开 Clash Verge →「订阅」页点一下当前订阅卡片（推荐）

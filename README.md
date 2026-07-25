@@ -1,6 +1,6 @@
 # Claude 专线：让 Claude 流量走美国静态住宅 IP（agent 一键复刻版）
 
-**v1.2.0** · 仅支持 macOS · 版本以根目录 [`VERSION`](VERSION) 为准 · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
+**v1.2.1** · 仅支持 macOS · 版本以根目录 [`VERSION`](VERSION) 为准 · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
 
 让 macOS 上的 Claude（网页版 / 桌面版 / Claude Code 全覆盖）永久走一个**固定的美国静态住宅 IP**，其余流量保持你机场订阅的原有规则不变。
 
@@ -231,7 +231,7 @@ bash scripts/verify.sh
 | `scripts/verify.sh` | 一键六项验证（`--save-baseline` 记录出口基线） |
 | `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
 | `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚某次部署（新建的文件会被删除） |
-| `scripts/selftest.sh` | 烟雾测试（沙箱跑，改脚本后先跑它） |
+| `scripts/selftest.sh` | 烟雾测试 31 项（沙箱跑，改脚本后先跑它） |
 | `templates/optional-payment-rules.yaml` | 可选：让订阅付款也走静态 IP（默认不启用） |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
