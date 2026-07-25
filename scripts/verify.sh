@@ -2,6 +2,20 @@
 # Claude 专线一键验证（六项）。全绿 = 部署成功；红项对照 docs/troubleshooting.md
 # 依赖：macOS 自带的 bash/curl/python3，无需额外安装
 
+# 依赖自检：缺工具就直接说清楚怎么装，别让脚本跑到一半才炸
+if [ "$(uname)" != "Darwin" ]; then
+  printf '\033[31m本脚本只支持 macOS（用到 scutil / stat -f 等 macOS 专用命令）。其他平台见 docs/porting.md。\033[0m\n'
+  exit 1
+fi
+MISSING=""
+for c in python3 curl; do command -v "$c" >/dev/null 2>&1 || MISSING="$MISSING $c"; done
+if [ -n "$MISSING" ]; then
+  printf '\033[31m缺少依赖:%s\033[0m\n' "$MISSING"
+  printf '  python3 缺失 → 跑一次 xcode-select --install（装 macOS 命令行工具，含 python3）\n'
+  printf '  curl 缺失   → 极少见，通常是 PATH 被改坏了，检查你的 ~/.zshrc\n'
+  exit 1
+fi
+
 CFG="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
 SOCK="/tmp/verge/verge-mihomo.sock"
 LOG="$CFG/logs/service/service_latest.log"

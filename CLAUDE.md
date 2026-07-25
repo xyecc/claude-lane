@@ -40,6 +40,7 @@ STOP 条件：用户不肯退出旧代理软件；用户拿不到订阅链接。
 3. **订阅已导入且含美国节点**：API `GET /proxies`，在节点名里搜（不区分大小写）「美国 | US | USA | America | United States | 🇺🇸 | Los Angeles | LA | San Jose | Seattle | Dallas | Phoenix | Ashburn | LAX | SJC」，把找到的美国节点名列出来（Phase 1 要用）。注意 `US` 会误匹配 `AUS`（澳洲）/`RUS`（俄罗斯），人工过一遍剔除。**一个都没搜到时不要直接 STOP**：先把订阅的完整节点名列表贴给用户人工指认（机场命名千奇百怪），用户确认确实没有美国节点才停
 4. **排查其他 VPN（红线）**：`scutil --nc list`，除 Tailscale 外任何处于 `(Connected)` 的 VPN（尤其 Shadowrocket）都必须先让用户断开并建议卸载。**STOP：用户不处理就不继续**——这是实测导致整机断网的雷。
 5. **当前出口基线**：`curl -sS --max-time 15 https://api.ipify.org?format=json` 记下当前机场出口 IP，后面对比用
+6. **平台与依赖**：`uname` 必须是 `Darwin`（本方案只支持 macOS，Windows/Linux 直接告诉用户不支持、指向 `docs/porting.md`）；`command -v python3 curl` 都要有（`verify.sh` 依赖；python3 缺失让用户跑 `xcode-select --install`）；用到 brew 安装时先确认 `command -v brew`，没有就给官方下载页让用户手动装，别假设有 Homebrew
 
 STOP 条件：Clash 没装/没跑 → 回 Phase -1 处理；订阅里没有美国节点 → 让用户换含美国节点的套餐。
 
