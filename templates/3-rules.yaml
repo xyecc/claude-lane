@@ -1,0 +1,55 @@
+# 模板③：rules 增强文件 —— 全套规则
+# 写入位置：$CFG/profiles/<订阅option里rules对应的uid>.yaml
+# 整体照抄，顺序敏感：QUIC 拦截必须排最前。没有占位符。
+# 注意：不含全局 "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT" —— 那会误伤全机 HTTP/3，
+#       已被下面的进程级拦截取代，不要自作主张加回去。
+
+prepend:
+  # ── 1. Chrome 的 QUIC 会绕过域名嗅探漏到默认节点（实测漏成日本），拒绝后无感回落 TCP
+  - "AND,((PROCESS-NAME,Google Chrome Helper),(NETWORK,UDP),(DST-PORT,443)),REJECT"
+  - "AND,((PROCESS-NAME,Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT"
+  # ⚠️ 这里只拦了 Google Chrome。其他 Chromium 系浏览器（Edge / Arc / Brave 等）QUIC 同样会漏，
+  #    症状一样（会话显示日本等机场默认位置）。用的话照抄上面两条、换成对应进程名：
+  #      Edge:  "Microsoft Edge" / "Microsoft Edge Helper"
+  #      Arc:   "Arc" / "Arc Helper"
+  #      Brave: "Brave Browser" / "Brave Browser Helper"
+  #    Safari 的网络请求走系统进程，没有干净的进程级拦法；用 Safari 出现漏流就换浏览器访问 claude.ai。
+
+  # ── 2. Claude 桌面版全家的 UDP 同理拒绝，强制走 TCP
+  - "AND,((PROCESS-NAME,Claude Helper),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,Claude Helper (GPU)),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,Claude Helper (Renderer)),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,Claude Helper (Plugin)),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,Claude),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,claude.exe),(NETWORK,UDP)),REJECT"
+
+  # ── 3. Claude 桌面版按进程名导流（最可靠，不受 DNS/IP 影响；顺带覆盖 claude CLI）
+  - "PROCESS-NAME,Claude Helper,Claude"
+  - "PROCESS-NAME,Claude Helper (GPU),Claude"
+  - "PROCESS-NAME,Claude Helper (Renderer),Claude"
+  - "PROCESS-NAME,Claude Helper (Plugin),Claude"
+  - "PROCESS-NAME,Claude,Claude"
+  - "PROCESS-NAME,claude.exe,Claude"           # Claude Code 原生可执行文件
+
+  # ── 4. 域名兜底（网页版、Claude Code、其他工具）
+  - "DOMAIN-SUFFIX,anthropic.com,Claude"
+  - "DOMAIN-SUFFIX,claude.com,Claude"
+  - "DOMAIN-SUFFIX,claude.ai,Claude"
+  - "DOMAIN-SUFFIX,claudeusercontent.com,Claude"
+  - "DOMAIN-KEYWORD,anthropic,Claude"
+
+  # ── 5. Anthropic 自有 IP 段兜底
+  - "IP-CIDR,160.79.104.0/23,Claude,no-resolve"
+
+  # ── 6. 订阅付款相关也走静态 IP（避免支付风控）
+  # ⚠️ 副作用：你在【任何网站】用 Stripe / Google Pay 付款都会走静态 IP，不只是 Anthropic 订阅。
+  #    不想要就删掉本组 5 条，不影响 Claude 专线本身。
+  - "DOMAIN-SUFFIX,stripe.com,Claude"
+  - "DOMAIN-SUFFIX,stripecdn.com,Claude"
+  - "DOMAIN-SUFFIX,stripe.network,Claude"
+  - "DOMAIN-SUFFIX,pay.google.com,Claude"
+  - "DOMAIN-SUFFIX,payments.google.com,Claude"
+
+append: []
+
+delete: []

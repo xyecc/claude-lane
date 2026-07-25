@@ -1,0 +1,17 @@
+# 模板①：proxies 增强文件 —— iproyal 静态节点
+# 写入位置：$CFG/profiles/<订阅option里proxies对应的uid>.yaml
+# 《》内为需要替换的占位符；三个关键项 type/udp/dialer-proxy 一个都不能改
+
+prepend: []
+
+append:
+  - name: "🇺🇸 US-Static-iproyal"
+    type: socks5                      # 必须 socks5（http 方式已淘汰，实测不稳）
+    server: 《iproyal主机，形如 198.51.100.10》
+    port: 《iproyal端口，形如 12324》
+    username: "《iproyal用户名》"
+    password: "《iproyal密码》"
+    udp: false                        # 必须 false：QUIC 走不通才会回落 TCP，这是防漏流的一环
+    dialer-proxy: "US-Chain"          # 必须：先走机场美国节点，再连 iproyal（国内直连 iproyal 不通）
+
+delete: []

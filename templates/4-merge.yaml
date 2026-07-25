@@ -1,0 +1,22 @@
+# 模板④：merge 增强文件 —— 域名嗅探
+# 写入位置：$CFG/profiles/<订阅option里merge对应的uid>.yaml
+# 作用：应用自带 DoH/自解析 DNS 时，TUN 只见 IP 不见域名，靠嗅探把域名找回来，
+#       否则第 4 组域名规则会失效。若用户 merge 文件已有其他内容，保留并追加本段。
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    QUIC:
+      ports: [443]
+    TLS:
+      ports: [443, 8443]
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+  force-domain:
+    - "+.anthropic.com"
+    - "+.claude.com"
+    - "+.claude.ai"
+    - "+.claudeusercontent.com"

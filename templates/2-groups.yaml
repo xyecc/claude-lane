@@ -1,0 +1,22 @@
+# 模板②：groups 增强文件 —— Claude 出口组 + 链式前置组
+# 写入位置：$CFG/profiles/<订阅option里groups对应的uid>.yaml
+# US-Chain 里的节点名必须和订阅里的名字逐字一致（含 emoji、空格、倍率后缀）
+
+prepend:
+  # Claude 流量的最终出口
+  - name: "Claude"
+    type: select
+    proxies:
+      - "🇺🇸 US-Static-iproyal"
+
+  # 连 iproyal 的前置链路：放订阅里实际的美国节点名（延迟低的放前面）
+  - name: "US-Chain"
+    type: select
+    proxies:
+      - "《美国节点1，如：标准 美国01 倍率x1.0》"
+      - "《美国节点2》"
+      - "《美国节点3》"
+
+append: []
+
+delete: []
