@@ -20,16 +20,20 @@ fi
 SAVE_BASELINE=0
 [ "${1:-}" = "--save-baseline" ] && SAVE_BASELINE=1
 
-CFG="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+CFG="${CLAUDE_LANE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 STATE="$CFG/claude-lane-state.json"
 SOCK="/tmp/verge/verge-mihomo.sock"
 LOG="$CFG/logs/service/service_latest.log"
 GEN="$CFG/clash-verge.yaml"
 FAIL=0
+# 版本号的唯一来源是仓库根目录的 VERSION 文件（别再往脚本里写死——v1.1.1 就写串过）
+REPO_VERSION=$(tr -d '\r\n ' < "$(cd "$(dirname "$0")/.." && pwd)/VERSION" 2>/dev/null)
+REPO_VERSION=${REPO_VERSION:-unknown}
 
 ok()   { printf '  \033[32m✅ %s\033[0m\n' "$1"; }
 bad()  { printf '  \033[31m❌ %s\033[0m\n' "$1"; FAIL=$((FAIL+1)); }
 note() { printf '     %s\n' "$1"; }
+warn() { printf '  \033[33m⚠️  %s\033[0m\n' "$1"; }
 
 # 自动发现：静态节点服务器 IP、混合端口
 STATIC_IP=$(python3 - "$GEN" <<'PY'
@@ -201,18 +205,33 @@ else
   note "$OTHERVPN"
 fi
 
+echo "[版本] 本机部署的模板版本 vs 仓库当前版本"
+DEPLOYED_VERSION=$(python3 -c "
+import json
+try: print(json.load(open('$STATE')).get('template_version',''))
+except Exception: print('')" 2>/dev/null)
+if [ -z "$DEPLOYED_VERSION" ]; then
+  note "本机还没记录部署版本（跑一次 bash scripts/verify.sh --save-baseline 记下来）"
+elif [ "$DEPLOYED_VERSION" = "$REPO_VERSION" ]; then
+  ok "版本一致（${REPO_VERSION}）"
+else
+  warn "配置漂移：本机是 ${DEPLOYED_VERSION}，仓库已到 ${REPO_VERSION}"
+  note "仓库模板更新不会自动同步到已部署的机器（见排障手册第 10 条）。"
+  note "让 agent 按最新 templates/ 重新对齐一次，GUI 激活后再跑 bash scripts/verify.sh --save-baseline"
+fi
+
 echo
 # 记录/更新出口基线（只在全绿时写，免得把出错状态记成基线）
 if [ "$SAVE_BASELINE" = "1" ]; then
   if [ "$FAIL" -eq 0 ] && [ -n "${TRACE_IP:-}" ]; then
     VERGE_VER=$(plutil -extract CFBundleShortVersionString raw \
       "/Applications/Clash Verge.app/Contents/Info.plist" 2>/dev/null || echo unknown)
-    python3 - "$STATE" "$TRACE_IP" "${TRACE_LOC:-}" "$VERGE_VER" "$(date '+%F')" <<'PY'
+    python3 - "$STATE" "$TRACE_IP" "${TRACE_LOC:-}" "$VERGE_VER" "$(date '+%F')" "$REPO_VERSION" <<'PY'
 import json, sys
-state, ip, loc, ver, day = sys.argv[1:6]
+state, ip, loc, ver, day, tpl = sys.argv[1:7]
 try: d = json.load(open(state))
 except Exception: d = {}
-d.update({"template_version": "1.1.0", "claude_exit_ip": ip, "country": loc,
+d.update({"template_version": tpl, "claude_exit_ip": ip, "country": loc,
           "clash_verge": ver, "baseline_saved_at": day})
 d.setdefault("installed_at", day)
 json.dump(d, open(state, "w"), ensure_ascii=False, indent=2)

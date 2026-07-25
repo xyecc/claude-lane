@@ -1,6 +1,6 @@
 # Claude 专线：让 Claude 流量走美国静态住宅 IP（agent 一键复刻版）
 
-**v1.1.1** · 仅支持 macOS · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
+**v1.2.0** · 仅支持 macOS · 版本以根目录 [`VERSION`](VERSION) 为准 · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
 
 让 macOS 上的 Claude（网页版 / 桌面版 / Claude Code 全覆盖）永久走一个**固定的美国静态住宅 IP**，其余流量保持你机场订阅的原有规则不变。
 
@@ -192,6 +192,10 @@ bash scripts/verify.sh
 - **第 2 项红**（组指向错）→ 在 GUI 里手滑把组改了，改回去。
 - **浏览器里异常但桌面版正常** → 典型 QUIC 漏流，见排障手册第 2 条；用 Edge/Arc/Brave 的要自己补拦截规则。
 
+**要不要把电脑的系统地区也改成美国？** **建议改**，代价接近零：系统设置 → 通用 → 语言与地区 → 地区选**美国**。出口 IP 是美国，设备侧也报美国，两边一致。**界面语言不用动**，保持中文完全没问题；地区只影响日期数字格式。时区**不强制**改（改了日历提醒会全部错位），取舍见 `docs/account-safety.md` 第三节。查当前值：`defaults read -g AppleLocale`（期望以 `_US` 结尾）。
+
+**怎么知道我这台机器的配置是不是过时了？** 跑 `bash scripts/verify.sh`，末尾的 `[版本]` 一行会拿本机部署时记录的版本和仓库当前 `VERSION` 比对，落后会提示重新对齐（这就是排障手册第 10 条"配置漂移"的自动检测）。
+
 **我现在用的不是 Clash Verge（Surge / ClashX / sing-box……）怎么办？** agent 会帮你装 Clash Verge 并把订阅迁过来（订阅链接是通用的），原软件退出卸载即可——顺便排掉"双代理抢路由"这颗雷。执意留在原软件的，看 `docs/porting.md` 自己移植：那条路没验证过，不担保。
 
 ## 购买渠道
@@ -232,7 +236,8 @@ bash scripts/verify.sh
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
 | `docs/iphone-notes.md` | iPhone（小火箭）能配，步骤未整理；附一条 Mac 红线 |
-| `CHANGELOG.md` | 版本更新日志 |
+| `VERSION` | 版本号唯一来源（脚本读它，别手工改散在各处的版本字符串） |
+| `CHANGELOG.md` | 版本更新日志（每版对应一个 git tag / GitHub Release） |
 
 ---
 
