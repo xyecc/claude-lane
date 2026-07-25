@@ -25,7 +25,7 @@ Claude 服务器看到的出口 IP = 你的 静态住宅 IP，永久固定。
 
 ## 你需要准备的三样东西
 
-1. **Clash Verge Rev** 已安装、已导入机场订阅（订阅里**必须有美国节点**），开着 TUN（虚拟网卡）+ 规则模式能正常上网
+1. **机场订阅**（套餐里**必须有美国节点**）。已经在用 Clash Verge Rev 最好；用别的代理软件、或者干脆什么都没装也行——agent 会帮你装 Verge 并迁移，你只需提供订阅链接（原来的代理软件要退出卸载）
 2. **美国静态住宅 IP** 一份：`host:port:username:password` 四元组，协议 **SOCKS5**
 3. **Claude Code** 已安装、能正常对话
 
@@ -41,7 +41,9 @@ claude
 
 > **按这个仓库的流程给本机配置 Claude 专线，先做环境体检。**
 
-agent 会自己完成：环境体检 → 向你要 静态IP四元组 → 备份并写入配置 → 请你在 GUI 点一次激活 → 跑 `scripts/verify.sh` 全链路验证 → 教你收尾（重启浏览器、清理旧会话）。
+agent 会自己完成：环境体检（没装 Clash Verge 会先帮你装好、迁入订阅）→ 向你要静态IP四元组 → 备份并写入配置（美国节点默认全用，不逐个问）→ 请你在 GUI 点一次激活 → 跑 `scripts/verify.sh` 全链路验证 → 代你重启浏览器和桌面版 → 教你收尾。
+
+**你全程要动手的只有四件事**：事先买好静态 IP；（新装 Verge 时）贴一次订阅链接；把四元组交给 agent；在 GUI 点一次激活 + 最后去 claude.ai 撤销旧会话。
 
 不想用 agent、或想亲手做一遍搞懂每一步的：照 **`docs/manual-setup.md`**（人肉版手册，和 agent 流程完全等价，约 20–30 分钟）。
 
@@ -69,6 +71,8 @@ bash scripts/verify.sh
 
 **换了机场 / 订阅更新了怎么办？** 订阅自动更新不影响增强文件（这是用增强文件而不是直接改配置的原因）。换机场则要重跑一遍部署（美国节点名变了，US-Chain 里的名字要对齐）。
 
+**我现在用的不是 Clash Verge（Surge / ClashX / sing-box……）怎么办？** agent 会帮你装 Clash Verge 并把订阅迁过来（订阅链接是通用的），原软件退出卸载即可——顺便排掉"双代理抢路由"这颗雷。执意留在原软件的，看 `docs/porting.md` 自己移植：那条路没验证过，不担保。
+
 ## 购买渠道
 
 | 服务 | 链接 | 备注 |
@@ -94,8 +98,9 @@ bash scripts/verify.sh
 
 | 文件 | 用途 |
 |---|---|
-| `CLAUDE.md` | agent 执行手册（七阶段流程，Claude Code 进入本目录自动加载） |
+| `CLAUDE.md` | agent 执行手册（含安装迁移的全阶段流程，Claude Code 进入本目录自动加载） |
 | `docs/manual-setup.md` | 人肉版部署手册（不用 agent 的等价流程） |
+| `docs/porting.md` | 非 Clash Verge 客户端的移植规格（未验证，不担保） |
 | `templates/` | 4 个 Clash 增强文件模板（填空即用） |
 | `scripts/verify.sh` | 一键六项验证（出口 IP、组状态、规则、漏流扫描等） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
