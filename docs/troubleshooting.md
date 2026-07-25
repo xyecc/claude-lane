@@ -82,11 +82,32 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 
 ## 9. Claude Code 的遥测流量走了默认机场节点
 
-**症状**：Claude API 和 `claude.ai` 已走静态 IP，但日志里仍出现 `claude.exe` 访问 `http-intake.logs.us5.datadoghq.com`，并命中 `Final` 或默认代理组。
+**症状**：Claude API 和 `claude.ai` 已走静态 IP，但日志里出现 `http-intake.logs.us5.datadoghq.com` 命中 `Match using Final[...]`（走了默认节点）。
 
-**原因**：macOS 上的 Claude Code 原生可执行文件名也是 `claude.exe`。只配置 `Claude` / `Claude Helper` 进程规则时，Anthropic 域名能被域名规则兜住，但 Datadog 等遥测域名会漏到默认组。
+**原因（2026-07-25 实机排查，本条已重写）**：有**两层**原因，只解决第一层不够。
 
-**处理**：确认规则中同时存在 `PROCESS-NAME,claude.exe,Claude` 和对应的 UDP 拒绝规则；重新激活订阅后再运行 `verify.sh`。
+**第一层：进程名写错了。** Claude Code 在磁盘上的可执行文件确实叫 `claude.exe`（macOS 上也是，见 `CLAUDE_CODE_EXECPATH`），**但 mihomo 匹配的是内核看到的进程名**（`ps -axo comm`），实测是**小写 `claude`**。所以只写 `PROCESS-NAME,claude.exe` 的规则永远不命中。
+
+**第二层（关键）：这条连接的进程根本识别不出来。** 补上小写 `claude` 规则、确认 `/rules` 里有了之后，遥测**仍然**在漏。查 mihomo 的 `/connections` 才看明白：这条连接的 `process` 字段是**空的**（同一时刻别的连接都有值，比如 `Google Chrome Helper`）——mihomo 没能把它归属到任何进程，于是所有 `PROCESS-NAME` 规则都无从匹配，请求落到 MATCH 兜底、从机场默认节点出去了。作者自己的机器就这么静默漏了一段时间，而当时 `verify.sh` 还是全绿（它只检查规则存不存在，不检查有没有真的命中）。
+
+**所以正解是加域名规则**（模板③第 4b 组已内置）：
+
+```yaml
+- "DOMAIN-SUFFIX,http-intake.logs.us5.datadoghq.com,Claude"
+```
+
+⚠️ **不要**图省事写成 `DOMAIN-SUFFIX,datadoghq.com,Claude`——那会把其他网站的 Datadog 前端埋点也导进你的静态 IP，反而污染"这个 IP 只访问 Anthropic"的画像。
+
+**自查与验证**：
+
+```bash
+# 本机 Claude 相关进程的真实名字（规则里逐个覆盖）
+ps -axo comm | sed 's|.*/||' | grep -i claude | sort -u
+# 遥测到底走了哪个组：应为 using Claude[...]，不是 using Final[...]
+grep -iE 'datadoghq|statsig' "$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/logs/service/service_latest.log" | tail -3
+```
+
+`verify.sh` 已相应加强：第 3 项改为核对**当前真实在跑**的 Claude 进程是否都有规则（不再只看规则存不存在），第 5 项漏流扫描纳入 `datadoghq` / `statsig` 域名。
 
 ## 10. 配置漂移：仓库模板升级了，旧机器还在跑老规则（2026-07 真实案例）
 

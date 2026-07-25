@@ -22,6 +22,7 @@ prepend:
   - "AND,((PROCESS-NAME,Claude Helper (Plugin)),(NETWORK,UDP)),REJECT"
   - "AND,((PROCESS-NAME,Claude),(NETWORK,UDP)),REJECT"
   - "AND,((PROCESS-NAME,claude.exe),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-NAME,claude),(NETWORK,UDP)),REJECT"
 
   # ── 3. Claude 桌面版按进程名导流（最可靠，不受 DNS/IP 影响；顺带覆盖 claude CLI）
   - "PROCESS-NAME,Claude Helper,Claude"
@@ -29,7 +30,13 @@ prepend:
   - "PROCESS-NAME,Claude Helper (Renderer),Claude"
   - "PROCESS-NAME,Claude Helper (Plugin),Claude"
   - "PROCESS-NAME,Claude,Claude"
-  - "PROCESS-NAME,claude.exe,Claude"           # Claude Code 原生可执行文件
+  # ⚠️ Claude Code 的进程名两个都要写。磁盘上的文件叫 claude.exe（连 macOS 上也是），
+  #    但 mihomo 匹配的是内核看到的进程名（`ps -axo comm`），实测显示为小写 claude。
+  #    只写 claude.exe 的话规则永远不命中 → anthropic 域名靠域名规则还能兜住，
+  #    但 Datadog 等遥测域名会漏到默认节点（2026-07 实测漏到日本，见排障手册第 9 条）。
+  #    部署前用 `ps -axo comm | sed 's|.*/||' | grep -i claude | sort -u` 看本机真实进程名，多的一并加上。
+  - "PROCESS-NAME,claude.exe,Claude"
+  - "PROCESS-NAME,claude,Claude"
 
   # ── 4. 域名兜底（网页版、Claude Code、其他工具）
   - "DOMAIN-SUFFIX,anthropic.com,Claude"
@@ -37,6 +44,15 @@ prepend:
   - "DOMAIN-SUFFIX,claude.ai,Claude"
   - "DOMAIN-SUFFIX,claudeusercontent.com,Claude"
   - "DOMAIN-KEYWORD,anthropic,Claude"
+
+  # ── 4b. Claude Code 的遥测域名（⚠️ 别省，2026-07-25 实测这条不加就在漏）
+  # 为什么必须靠域名而不是进程规则：实测发现 mihomo 对这条连接**识别不出进程**
+  # （/connections 里 process 字段为空），所以任何 PROCESS-NAME 规则都抓不到它，
+  # 结果遥测请求命中 MATCH 兜底、从机场默认节点（日本）发出去 —— 与"固定美国 IP"的初衷相反。
+  # 只写这个精确主机名，不要写 DOMAIN-SUFFIX,datadoghq.com：
+  # 后者会把其他网站的 Datadog 前端埋点也拽进静态 IP，反而污染"这个 IP 只访问 Anthropic"的画像。
+  # 如果哪天日志里出现别的分片（us3 / eu1 等），照样式加一条；verify.sh 的漏流扫描会替你发现。
+  - "DOMAIN-SUFFIX,http-intake.logs.us5.datadoghq.com,Claude"
 
   # ── 5. Anthropic 自有 IP 段兜底
   - "IP-CIDR,160.79.104.0/23,Claude,no-resolve"

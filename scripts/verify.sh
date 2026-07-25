@@ -100,9 +100,22 @@ else: print("  \033[32m✅ 无全局 UDP/443 拦截\033[0m")
 if any(r["payload"]=="claude.com" for r in rules if r["type"]=="DomainSuffix"):
     print("  \033[32m✅ claude.com 域名规则存在\033[0m")
 else: fails.append("缺 DOMAIN-SUFFIX,claude.com 规则")
-if any(r["payload"].lower()=="claude.exe" for r in rules if r["type"]=="ProcessName"):
-    print("  \033[32m✅ Claude Code 进程规则存在\033[0m")
-else: fails.append("缺 PROCESS-NAME,claude.exe 规则（Claude Code 遥测可能漏到默认节点）")
+if any("datadoghq" in r["payload"] for r in rules):
+    print("  \033[32m✅ 遥测域名规则存在\033[0m")
+else: fails.append("缺遥测域名规则（DOMAIN-SUFFIX,http-intake.logs.us5.datadoghq.com,Claude）——进程规则抓不到它，会漏到默认节点，见排障手册第 9 条")
+# 进程规则核对：不看"有没有写 claude.exe"，看当前【真实在跑】的 Claude 进程有没有对应规则。
+# （磁盘文件叫 claude.exe，但 mihomo 匹配的是 ps comm，macOS 上实测是小写 claude——只写 exe 会静默漏遥测）
+running = sorted({l.rsplit("/",1)[-1].strip() for l in subprocess.run(
+    ["ps","-axo","comm"], capture_output=True, text=True).stdout.splitlines()
+    if "claude" in l.rsplit("/",1)[-1].lower()})
+ruled = {r["payload"] for r in rules if r["type"]=="ProcessName"}
+missing = [p for p in running if p not in ruled]
+if not running:
+    print("  \033[33m⚠️ 当前没有 Claude 进程在跑，跳过进程规则核对（开着 Claude 再跑一次更准）\033[0m")
+elif missing:
+    fails.append("这些正在运行的 Claude 进程没有对应规则（遥测会漏到默认节点）: %s" % missing)
+else:
+    print("  \033[32m✅ 在跑的 Claude 进程都有对应规则（%s）\033[0m" % ", ".join(running))
 for f in fails: print("  \033[31m❌ %s\033[0m" % f)
 sys.exit(1 if fails else 0)
 PY
@@ -132,7 +145,7 @@ echo "[5/6] 日志漏流扫描"
 # 若日志格式变更，过滤会静默失效——激活前的旧漏流记录也会被算进来，出现莫名其妙的红项时先人工看日志时间。
 ACTIVATED_AT=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$GEN" 2>/dev/null)
 LEAK=$(awk -v start="[$ACTIVATED_AT" 'start == "[" || $0 >= start' "$LOG" 2>/dev/null \
-       | tail -800 | grep -iE "claude|anthropic" | grep " using " \
+       | tail -800 | grep -iE "claude|anthropic|datadoghq|statsig" | grep " using " \
        | grep -v "using Claude\[" | grep -v "using REJECT" | tail -5)
 if [ -z "$LEAK" ]; then
   ok "本次激活后无 Claude/Anthropic 流量走到非 Claude 组"
