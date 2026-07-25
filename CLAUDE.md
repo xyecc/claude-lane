@@ -1,6 +1,6 @@
 # CLAUDE.md — Claude 专线配置执行手册（写给 agent）
 
-你是新机器上的 Claude Code。本手册指导你把「只有 Claude 流量走 iproyal 静态住宅 IP」的 Clash Verge Rev 配置部署到本机。**严格按七个阶段顺序执行，每个阶段的 STOP 条件命中就停下来问用户，不要硬闯。**
+你是新机器上的 Claude Code。本手册指导你把「只有 Claude 流量走 美国静态住宅 IP」的 Clash Verge Rev 配置部署到本机。**严格按七个阶段顺序执行，每个阶段的 STOP 条件命中就停下来问用户，不要硬闯。**
 
 通用约定：
 
@@ -8,7 +8,7 @@
 - Mihomo 控制 API 走 unix socket：`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/<endpoint>`（若 socket 不存在，读 `$CFG/clash-verge.yaml` 里的 `external-controller` 换 TCP 方式）
 - 内核日志：`$CFG/logs/service/service_latest.log`
 - 所有写文件操作前先备份为 `<原名>.bak-<月日时分>`
-- 用户的凭证（iproyal 四元组）只写进 `$CFG/profiles/` 下的本地文件，**绝不写进本仓库目录、绝不出现在 git 里**
+- 用户的凭证（静态IP四元组）只写进 `$CFG/profiles/` 下的本地文件，**绝不写进本仓库目录、绝不出现在 git 里**
 
 ---
 
@@ -26,7 +26,7 @@ STOP 条件：Clash 没装/没跑 → 让用户按 README 装好再来；订阅�
 
 ## Phase 1：收集输入（问用户）
 
-1. **iproyal SOCKS5 四元组**：host、port、username、password。拿到后先做一次**预期失败测试**并向用户解释：从国内直连 iproyal 通常超时或被拒（`curl --max-time 15 --socks5-hostname 'user:pass@host:port' https://api.ipify.org` 失败**是正常的**，iproyal 常只接受美国来源，这正是要链式代理的原因）。如果直连反而成功且返回静态 IP，也记录下来。
+1. **静态IP SOCKS5 四元组**：host、port、username、password。拿到后先做一次**预期失败测试**并向用户解释：从国内直连 静态 IP 通常超时或被拒（`curl --max-time 15 --socks5-hostname 'user:pass@host:port' https://api.ipify.org` 失败**是正常的**，静态IP 常只接受美国来源，这正是要链式代理的原因）。如果直连反而成功且返回静态 IP，也记录下来。
 2. **确认美国节点**：把 Phase 0 找到的美国节点列表给用户看，让用户确认用哪几个进 US-Chain（默认全放进去，排延迟最低的在前）。
 
 ## Phase 2：定位增强文件
@@ -42,7 +42,7 @@ STOP 条件：Clash 没装/没跑 → 让用户按 README 装好再来；订阅�
 
 按 `templates/` 下四个模板，把内容写进对应 uid 文件（先备份原文件；若原文件已有用户自己的增强内容，合并而不是覆盖，冲突处问用户）：
 
-1. `templates/1-proxies.yaml` → proxies 文件：填 iproyal 四元组。**type 必须是 socks5、udp: false、dialer-proxy: "US-Chain" 一个都不能少**
+1. `templates/1-proxies.yaml` → proxies 文件：填 静态IP四元组。**type 必须是 socks5、udp: false、dialer-proxy: "US-Chain" 一个都不能少**
 2. `templates/2-groups.yaml` → groups 文件：US-Chain 里填 Phase 1 确认的真实美国节点名（**必须和订阅里的名字逐字一致，含 emoji 和空格**）
 3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（QUIC 拦截必须在最前）；同时覆盖桌面版的 `Claude` / `Claude Helper` 与 Claude Code 的 `claude.exe`
 4. `templates/4-merge.yaml` → merge 文件：sniffer 段照抄（若用户 merge 文件里已有其他顶层配置，保留并追加 sniffer 段）
@@ -73,7 +73,7 @@ bash scripts/verify.sh
 
 1. **⌘Q 完全退出并重启** Chrome、Claude 桌面版（不是关窗口；QUIC 会话和连接池有缓存）
 2. 打开 claude.ai → 设置 → 帐户 → **活跃会话**：把归属地不是静态 IP 所在地的旧会话全部撤销，重新登录
-3. 刷新后检查：当前会话的归属地应该显示静态 IP 的地区（iproyal 美国 IP 常显示为弗吉尼亚州阿什本等）
+3. 刷新后检查：当前会话的归属地应该显示静态 IP 的地区（美国住宅 IP 常显示为弗吉尼亚州阿什本等）
 4. 向用户复述三条红线：不装第二个 VPN、不切全局模式、以后订阅自动更新后增强文件仍然生效但如遇异常先跑 verify.sh
 
 ## 回滚（任一阶段失败且当场修不好时）

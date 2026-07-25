@@ -30,11 +30,11 @@ scutil --nc list
 
 把 ③ 里找到的美国节点名**原样记下来**（含 emoji、空格、倍率后缀），第 3 步要逐字用。
 
-## 第 1 步：拿到 iproyal 四元组
+## 第 1 步：拿到 静态IP四元组
 
-iproyal 订单详情里拿 SOCKS5 的 `host / port / username / password` 四样。
+静态 IP 服务商的订单详情里拿 SOCKS5 的 `host / port / username / password` 四样。
 
-**不用测直连**——从国内直连 iproyal 超时是正常的（它通常只接受美国来源），这正是后面要走链式代理的原因。
+**不用测直连**——从国内直连 静态 IP 超时是正常的（它通常只接受美国来源），这正是后面要走链式代理的原因。
 
 ## 第 2 步：找到四个增强文件
 
@@ -60,7 +60,7 @@ for f in <proxies的uid> <groups的uid> <rules的uid> <merge的uid>; do cp "$f.y
 
 | 模板 | 写进哪 | 要改什么 |
 |---|---|---|
-| `1-proxies.yaml` | proxies 的 uid 文件 | 填 iproyal 四元组。**`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
+| `1-proxies.yaml` | proxies 的 uid 文件 | 填 静态IP四元组。**`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
 | `2-groups.yaml` | groups 的 uid 文件 | `US-Chain` 里填第 0 步记下的美国节点名，**逐字一致** |
 | `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前） |
 | `4-merge.yaml` | merge 的 uid 文件 | sniffer 段照抄（文件里已有别的顶层配置就保留、追加） |
@@ -89,7 +89,7 @@ bash scripts/verify.sh
 
 1. **⌘Q 完全退出并重启** Chrome 和 Claude 桌面版（不是关窗口，QUIC 会话有缓存）
 2. claude.ai → 设置 → 帐户 → **活跃会话**：撤销归属地不对的旧会话，重新登录
-3. 确认当前会话归属地 = 静态 IP 所在地（iproyal 美国 IP 常显示弗吉尼亚州阿什本等）
+3. 确认当前会话归属地 = 静态 IP 所在地（美国住宅 IP 常显示弗吉尼亚州阿什本等）
 4. 记住 README 的三条红线
 
 ## 搞砸了怎么回滚

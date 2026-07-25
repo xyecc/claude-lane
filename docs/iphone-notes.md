@@ -4,7 +4,7 @@
 
 ## 目标
 
-和 Mac 一致：iPhone 上只有 Claude App / claude.ai 的流量走 iproyal 静态 IP，其余走机场。
+和 Mac 一致：iPhone 上只有 Claude App / claude.ai 的流量走 静态住宅 IP，其余走机场。
 
 ## 工具
 
@@ -12,8 +12,8 @@ Shadowrocket（iOS 版）。注意：**Mac 版 Shadowrocket 不要装**——它
 
 ## 思路
 
-1. **节点**：添加 iproyal SOCKS5 节点（host/port/user/pass 四元组）
-2. **链式**：Shadowrocket 的代理链能力取决于版本——查你版本里有没有「代理链 / Proxy Chain / relay」类型的节点或分组。如果有：建一条 机场美国节点 → iproyal 的链；如果没有，iproyal 直连在部分运营商网络下可能碰运气能通（美国来源限制主要影响数据中心来源，实测口径不一）
+1. **节点**：添加 静态 IP SOCKS5 节点（host/port/user/pass 四元组）
+2. **链式**：Shadowrocket 的代理链能力取决于版本——查你版本里有没有「代理链 / Proxy Chain / relay」类型的节点或分组。如果有：建一条 机场美国节点 → 静态 IP 的链；如果没有，静态IP 直连在部分运营商网络下可能碰运气能通（美国来源限制主要影响数据中心来源，实测口径不一）
 3. **分流规则**（规则模式下添加，目标选到上面的链式出口，**千万不要选 DIRECT**——那是直连，等于绕过代理）：
 
 ```text

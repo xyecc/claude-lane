@@ -40,13 +40,13 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 
 **用的不是 Chrome？** 模板③只拦了 Google Chrome 的 QUIC。Edge / Arc / Brave 等其他 Chromium 系浏览器症状完全相同，把模板③最前面两条规则照抄、进程名换成对应浏览器的即可（模板③注释里有进程名对照表）。`verify.sh` 第 3 项只检查 Chrome 那两条，其他浏览器的规则要自己确认。
 
-## 3. 直连测试 iproyal 失败：`Can't complete SOCKS5 connection`
+## 3. 直连测试 静态 IP 失败：`Can't complete SOCKS5 connection`
 
 **症状**：`curl --socks5-hostname 'user:pass@host:port' https://api.ipify.org` 超时或报 SOCKS5 错误。
 
-**原因**：**这是正常的**。iproyal 静态住宅 IP 通常只接受美国来源的连接，从国内（或经日本等非美节点）直连会被拒。这正是必须用 `dialer-proxy` 链式（先到机场美国节点再连 iproyal）的原因。
+**原因**：**这是正常的**。美国静态住宅 IP 通常只接受美国来源的连接，从国内（或经日本等非美节点）直连会被拒。这正是必须用 `dialer-proxy` 链式（先到机场美国节点再连 静态IP）的原因。
 
-**处理**：不用处理。判断 iproyal 是否可用，看 `verify.sh` 第 4 项（走完整链路测出口）。链路通了直连失败无所谓。
+**处理**：不用处理。判断 静态 IP 是否可用，看 `verify.sh` 第 4 项（走完整链路测出口）。链路通了直连失败无所谓。
 
 ## 4. Merge 文件里写 `append-proxies` 不生效
 
@@ -66,9 +66,9 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 
 **处理**：永远改 `profiles/` 下的增强文件，改完在 GUI「订阅」页点一下订阅卡片重新激活。
 
-## 7. iproyal IP 直连不稳/被墙
+## 7. 静态 IP 直连不稳/被墙
 
-**原因**：iproyal 服务器 IP 可能被 GFW 干扰，或国内到美国公网路由质量差。
+**原因**：静态 IP 的服务器 可能被 GFW 干扰，或国内到美国公网路由质量差。
 
 **处理**：`dialer-proxy: "US-Chain"` 链式（模板①已内置）。永远不要把静态节点的 `dialer-proxy` 去掉。
 
@@ -76,7 +76,7 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 
 **症状**：`verify.sh` 第 2 项报"其他组误用静态节点"，或第 4 项普通流量出口 = 静态 IP。
 
-**原因**：在 GUI 里手滑把「国外流量」之类的大组选成了 `🇺🇸 US-Static-iproyal`。静态住宅 IP 带宽小，扛不住全部流量，而且会污染"只有 Claude 用这个 IP"的画像。
+**原因**：在 GUI 里手滑把「国外流量」之类的大组选成了 `🇺🇸 US-Static`。静态住宅 IP 带宽小，扛不住全部流量，而且会污染"只有 Claude 用这个 IP"的画像。
 
 **处理**：GUI「代理」页把误选的组改回机场节点；只有 `Claude` 组该指向静态节点。
 

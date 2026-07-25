@@ -7,9 +7,9 @@ prepend:
   - name: "Claude"
     type: select
     proxies:
-      - "🇺🇸 US-Static-iproyal"
+      - "🇺🇸 US-Static"
 
-  # 连 iproyal 的前置链路：放订阅里实际的美国节点名（延迟低的放前面）
+  # 连 静态 IP 的前置链路：放订阅里实际的美国节点名（延迟低的放前面）
   - name: "US-Chain"
     type: select
     proxies:
