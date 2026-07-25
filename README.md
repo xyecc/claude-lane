@@ -1,6 +1,6 @@
 # Claude 专线：让 Claude 流量走美国静态住宅 IP（agent 一键复刻版）
 
-**v1.0.1** · 仅支持 macOS · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
+**v1.1.0** · 仅支持 macOS · 更新日志见 [CHANGELOG.md](CHANGELOG.md)
 
 让 macOS 上的 Claude（网页版 / 桌面版 / Claude Code 全覆盖）永久走一个**固定的美国静态住宅 IP**，其余流量保持你机场订阅的原有规则不变。
 
@@ -103,7 +103,8 @@ claude
    ├─ Phase 0   环境体检（只读）：内核/TUN/规则模式/美国节点/其他VPN/依赖工具
    │            └─ 有问题就停下告诉你，不硬闯
    │
-   ├─ Phase 1   【你把静态IP四元组给它】     ← 全程唯一要交的秘密
+   ├─ Phase 1   【你自己跑 `! bash scripts/set-credentials.sh` 填四元组】
+   │            密码隐藏输入、不经过 AI 对话；agent 只看到打码信息
    │            （美国节点默认全用，不问你）
    │
    ├─ Phase 2-3 定位4个增强文件 → 备份 → 按模板写入配置   （全自动）
@@ -117,7 +118,9 @@ claude
                 └─【你去 claude.ai 撤销旧会话重登】← 最后一件手工活
 ```
 
-**你全程要动手的只有四件事**：事先买好静态 IP；（新装 Verge 时）贴一次订阅链接；把四元组交给 agent；在 GUI 点一次激活 + 最后去 claude.ai 撤销旧会话。
+**你全程要动手的只有四件事**：事先买好静态 IP；（新装 Verge 时）贴一次订阅链接；跑一次凭证脚本；在 GUI 点一次激活 + 最后去 claude.ai 撤销旧会话。
+
+> 🔒 **凭证不进对话**：静态 IP 的账号密码由你自己跑 `scripts/set-credentials.sh` 写入本机（密码隐藏输入），AI 全程只看到打码后的确认信息。贴进聊天框等于发到模型服务端、并留在本机会话记录里。
 
 不想用 agent、或想亲手做一遍搞懂每一步的：照 **`docs/manual-setup.md`**（人肉版手册，和 agent 流程完全等价，约 20–30 分钟）。
 
@@ -128,6 +131,8 @@ claude
 ```bash
 bash scripts/verify.sh
 ```
+
+它会拿当前出口和**部署时实测记录的基线**比对（存在 `claude-lane-state.json`），所以能发现「出口悄悄换了」。换过静态 IP 之后确认无误，用 `bash scripts/verify.sh --save-baseline` 更新基线。
 
 配好的机器应该长这样（IP 是示例）：
 
@@ -148,7 +153,7 @@ bash scripts/verify.sh
   ✅ 在跑的 Claude 进程都有对应规则（Claude, Claude Helper, claude）
   ✅ 遥测域名规则存在
 [4/6] 出口双验（关键）
-  ✅ claude.ai 出口 = 198.51.100.10 <- 静态IP, 正确
+  ✅ claude.ai 出口 = 198.51.100.10 (US) <- 与基线一致
   ✅ 普通流量出口 = 203.0.113.55 <- 机场节点, 未误走静态
 [5/6] 日志漏流扫描
   ✅ 本次激活后无 Claude/Anthropic 流量走到非 Claude 组
@@ -168,8 +173,11 @@ bash scripts/verify.sh
 
 **配完多久生效？** 立即。但浏览器和桌面版有连接缓存，**必须 ⌘Q 重启**才切到新链路；claude.ai 的旧会话记录的还是老 IP，要手动撤销重登。
 
-**会影响我其他网站的速度吗？** 不会。只有 Claude 流量走静态 IP，其余流量按规则走机场原有链路，不经过静态 IP。唯一例外：模板③默认把 Stripe / Google Pay 支付域名也导过去了（让付款和订阅来自同一个 IP），**不想要可以删**（模板里有注释）。
-> 补充：Claude 订阅**中国大陆发行的银行卡全部不可用**，得用海外办理的信用卡或虚拟卡。所以这组支付规则对多数人根本用不上——只有你已经能正常付款、想让付款也走同一出口时才有意义。
+**会影响我其他网站的速度吗？** 不会。只有 Claude 流量走静态 IP，其余流量按规则走机场原有链路，不经过静态 IP。
+
+**订阅付款也要走静态 IP 吗？** 默认**不走**（v1.1.0 起支付规则移到了 `templates/optional-payment-rules.yaml`，默认不启用）。两个原因：一是加了之后你在**任何网站**用 Stripe / Google Pay 付款都会走静态 IP，会稀释"这个 IP 只访问 Anthropic"的画像；二是 Claude 订阅**中国大陆发行的卡全部不可用**（借记、信用卡都不行），只能用海外办理的信用卡或虚拟卡——卡本身不行的话，改 IP 也没用。确有需要再照那个模板追加。
+
+**配砸了怎么恢复？** `bash scripts/rollback.sh` 回滚**最近一次**部署（`--list` 看所有备份点）。每次部署的备份都在自己的时间戳目录里，回滚只碰这一次的改动，不会把你几个月前的配置也翻出来。
 
 **多台设备能共用同一个静态 IP 吗？** 能，而且推荐——"同一个住宅 IP 上有个人在多台设备用 Claude"本身就是很正常的画像，比每台机器一个 IP 更自然。带宽也够（Claude 流量很小）。注意：**每台机器都要各自部署一遍**（配置是写在本机 Clash 里的），而且模板升级后每台都要重新对齐（见排障手册第 10 条）。
 
@@ -216,7 +224,10 @@ bash scripts/verify.sh
 | `docs/manual-setup.md` | 人肉版部署手册（不用 agent 的等价流程） |
 | `docs/porting.md` | 非 Clash Verge 客户端的移植规格（未验证，不担保） |
 | `templates/` | 4 个 Clash 增强文件模板（填空即用） |
-| `scripts/verify.sh` | 一键六项验证（出口 IP、组状态、规则、漏流扫描等） |
+| `scripts/verify.sh` | 一键六项验证（`--save-baseline` 记录出口基线） |
+| `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
+| `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚最近一次部署 |
+| `templates/optional-payment-rules.yaml` | 可选：让订阅付款也走静态 IP（默认不启用） |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯） |
 | `docs/troubleshooting.md` | 排障手册（10 个真实踩过的坑） |
 | `docs/iphone-notes.md` | iPhone（小火箭）能配，步骤未整理；附一条 Mac 红线 |

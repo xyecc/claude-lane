@@ -1,0 +1,25 @@
+# 可选模板：让订阅付款也走静态 IP（**默认不启用**）
+#
+# 想用的话，把下面 5 条追加到 rules 增强文件的 prepend 列表里（放在模板③的规则之后即可）。
+#
+# ⚠️ 先看清楚这三件事，多数人其实用不上：
+#
+# 1) **中国大陆发行的银行卡全部不可用**（借记卡、信用卡都不行），Claude 订阅只能用海外办理的
+#    信用卡或虚拟卡。卡本身不行的话，这组规则救不了你——它只解决"付款来源 IP"，不解决发卡地。
+# 2) **副作用范围很大**：加了之后，你在【任何网站】用 Stripe / Google Pay 付款都会走静态 IP，
+#    不只是 Anthropic 的订阅。住宅 IP 带宽小，付款页面可能更慢。
+# 3) 也因此会**稀释"这个 IP 只访问 Anthropic"的画像**——而那正是本方案的核心价值。
+#
+# 结论：只有当你已经能正常付款、并且明确希望订阅付款与 Claude 使用来自同一出口时，才加这组。
+#      加完记得重新激活订阅并跑 verify.sh。
+
+prepend:
+  - "DOMAIN-SUFFIX,stripe.com,Claude"
+  - "DOMAIN-SUFFIX,stripecdn.com,Claude"
+  - "DOMAIN-SUFFIX,stripe.network,Claude"
+  - "DOMAIN-SUFFIX,pay.google.com,Claude"
+  - "DOMAIN-SUFFIX,payments.google.com,Claude"
+
+append: []
+
+delete: []

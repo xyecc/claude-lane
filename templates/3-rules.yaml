@@ -57,16 +57,10 @@ prepend:
   # ── 5. Anthropic 自有 IP 段兜底
   - "IP-CIDR,160.79.104.0/23,Claude,no-resolve"
 
-  # ── 6. 订阅付款相关也走静态 IP（避免支付风控）
-  # ⚠️ 副作用：你在【任何网站】用 Stripe / Google Pay 付款都会走静态 IP，不只是 Anthropic 订阅。
-  #    另注：Claude 订阅【中国大陆发行的银行卡全部不可用】，得用海外办理的信用卡或虚拟卡；
-  #    所以这组规则对多数人没意义，只有你已经能正常付款、想让付款也走同一出口时才留。
-  #    不想要就删掉本组 5 条，不影响 Claude 专线本身。
-  - "DOMAIN-SUFFIX,stripe.com,Claude"
-  - "DOMAIN-SUFFIX,stripecdn.com,Claude"
-  - "DOMAIN-SUFFIX,stripe.network,Claude"
-  - "DOMAIN-SUFFIX,pay.google.com,Claude"
-  - "DOMAIN-SUFFIX,payments.google.com,Claude"
+  # ── 6. 支付规则已移出本模板（默认不启用）
+  #    见 templates/optional-payment-rules.yaml：副作用是【任何网站】的 Stripe/Google Pay 付款
+  #    都会走静态 IP，会稀释"这个 IP 只访问 Anthropic"的画像；而且 Claude 订阅本来就不收
+  #    中国大陆发行的卡，多数人加了也没用。确有需要再照那个文件追加。
 
 append: []
 

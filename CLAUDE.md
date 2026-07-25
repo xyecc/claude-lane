@@ -9,8 +9,8 @@
 - Clash Verge Rev 配置目录：`$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev`（下文记作 `$CFG`）
 - Mihomo 控制 API 走 unix socket：`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/<endpoint>`（若 socket 不存在，读 `$CFG/clash-verge.yaml` 里的 `external-controller` 换 TCP 方式）
 - 内核日志：`$CFG/logs/service/service_latest.log`
-- 所有写文件操作前先备份为 `<原名>.bak-<月日时分>`
-- 用户的凭证（静态IP四元组）只写进 `$CFG/profiles/` 下的本地文件，**绝不写进本仓库目录、绝不出现在 git 里**
+- **所有写文件操作前，先用 `bash scripts/backup.sh <文件...>` 备份**（它会建一个独立的时间戳目录并返回路径）。把返回的路径记下来告诉用户，出事用 `bash scripts/rollback.sh` 回滚
+- **绝不索要、绝不接收用户的静态 IP 凭证**。四元组由用户自己跑 `scripts/set-credentials.sh` 写入本机（隐藏输入），你只会看到打码后的确认信息。凭证绝不进入对话、绝不写进本仓库目录、绝不出现在 git 里
 
 ---
 
@@ -46,7 +46,16 @@ STOP 条件：Clash 没装/没跑 → 回 Phase -1 处理；订阅里没有美�
 
 ## Phase 1：收集输入（问用户）
 
-1. **静态IP SOCKS5 四元组**：host、port、username、password。拿到后先做一次**预期失败测试**并向用户解释：从国内直连静态 IP 通常超时或被拒（`curl --max-time 15 --socks5-hostname 'user:pass@host:port' https://api.ipify.org` 失败**是正常的**，静态IP 常只接受美国来源，这正是要链式代理的原因）。如果直连反而成功且返回静态 IP，也记录下来。
+1. **凭证：让用户自己写入，你不要接手。** 原话告诉用户：
+
+   > 请你在终端自己跑一次（在 Claude Code 里可以直接输入下面这行，前面的感叹号会在本会话执行）：
+   > `! bash scripts/set-credentials.sh`
+   > 它会隐藏输入你的密码、直接写进本机 Clash 配置。**别把四元组贴进对话**——贴进来就等于发到模型服务端并留在本机会话记录里。
+
+   脚本跑完用户会得到一段打码信息（节点名、主机前几位、端口、备份目录），让他贴给你即可。
+   - 脚本报「当前订阅还没有 proxies 增强文件」→ 先做 Phase 2 的增强文件创建，再让他重跑
+   - 脚本报 `MODE=conflict`（那个文件里有用户自己的节点）→ 由你打开文件按模板①的 managed 标记块手工合并，**但仍然不要问密码**：让用户跑完脚本前先把自有内容备份，或让他手工把凭证填进你写好的骨架
+   - 顺带向用户解释一句：从国内直连静态 IP 通常超时/被拒是**正常的**（它一般只接受美国来源），这正是要链式代理的原因，不用测
 2. **美国节点不用问**：默认把 Phase 0 找到的全部美国节点放进 US-Chain（延迟低的排前面），告知一句「US-Chain 里放了这 N 个美国节点」即可继续，不要等确认；用户主动提了要求才按要求调整。
 
 ## Phase 2：定位增强文件
@@ -67,12 +76,20 @@ STOP 条件：Clash 没装/没跑 → 回 Phase -1 处理；订阅里没有美�
 
 ## Phase 3：写入配置（模板填空）
 
-按 `templates/` 下四个模板，把内容写进对应 uid 文件（先备份原文件；若原文件已有用户自己的增强内容，合并而不是覆盖，冲突处问用户）：
+**先备份**（一条命令备份本次要改的所有文件，记住返回的目录）：
 
-1. `templates/1-proxies.yaml` → proxies 文件：填 静态IP四元组。**type 必须是 socks5、udp: false、dialer-proxy: "US-Chain" 一个都不能少**
+```bash
+bash scripts/backup.sh "$CFG/profiles/<proxies uid>.yaml" "$CFG/profiles/<groups uid>.yaml" "$CFG/profiles/<rules uid>.yaml" "$CFG/profiles/<merge uid>.yaml"
+```
+
+然后按 `templates/` 下的模板写入对应 uid 文件（若原文件已有用户自己的增强内容，合并而不是覆盖，冲突处问用户；我们自己写的内容尽量包在 `# claude-lane managed start/end` 之间，方便以后只替换这一段）：
+
+1. `templates/1-proxies.yaml` → proxies 文件：**这个文件由用户跑 `scripts/set-credentials.sh` 写，你不要自己填凭证**。已经跑过就跳过，只核对结果：`grep -c 'US-Static' "$CFG/profiles/<proxies uid>.yaml"`，以及 `type: socks5` / `udp: false` / `dialer-proxy: "US-Chain"` 三项在不在（**一个都不能少**）
 2. `templates/2-groups.yaml` → groups 文件：US-Chain 里填 Phase 1 确认的真实美国节点名（**必须和订阅里的名字逐字一致，含 emoji 和空格**）
 3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（QUIC 拦截必须在最前）；同时覆盖桌面版的 `Claude` / `Claude Helper` 与 Claude Code 的 `claude.exe`
 4. `templates/4-merge.yaml` → merge 文件：sniffer 段照抄（若用户 merge 文件里已有其他顶层配置，保留并追加 sniffer 段）
+
+**不要默认加支付规则**：`templates/optional-payment-rules.yaml` 默认不启用（副作用是任何网站的 Stripe/Google Pay 付款都走静态 IP，且 Claude 订阅本来就不收中国大陆发行的卡）。只有用户主动提出"想让订阅付款也走这条线"才加，加之前把副作用讲清楚。
 
 ## Phase 4：激活
 
@@ -91,10 +108,12 @@ tail -20 "$CFG/logs/service/service_latest.log" | grep -i "Start TUN listening e
 ## Phase 5：验证
 
 ```bash
-bash scripts/verify.sh
+bash scripts/verify.sh --save-baseline
 ```
 
 六项全绿才算部署完成。任何一项红 → 按脚本输出的提示对照 `docs/troubleshooting.md`，修完重跑。**禁止在验证不过的情况下宣布完成。**
+
+`--save-baseline` 会把这次实测到的**真实出口 IP** 记进 `$CFG/claude-lane-state.json`（只在全绿时才写）。以后日常体检直接 `bash scripts/verify.sh`，它就跟这个基线比——能发现"出口悄悄换了"，这是只比配置里的服务器地址做不到的。
 
 ## Phase 6：客户端收尾
 
@@ -111,16 +130,16 @@ bash scripts/verify.sh
 
 ## 回滚（任一阶段失败且当场修不好时）
 
-Phase 3 起所有被改过的文件都有同目录备份 `<原名>.bak-<月日时分>`，恢复到部署前只要两步：
-
-1. 把备份复制回原文件名（同一文件有多份备份时，取**时间最早**的那份 = 部署前原状）：
+本次部署改过的文件都在 `scripts/backup.sh` 建的那个独立目录里，一条命令回滚：
 
 ```bash
-ls -lt "$CFG/profiles/"*.bak-*
-cp "$CFG/profiles/<uid>.yaml.bak-<最早时间>" "$CFG/profiles/<uid>.yaml"
+bash scripts/rollback.sh            # 回滚【最近一次】部署
+bash scripts/rollback.sh --list     # 先看有哪些备份点
 ```
 
-2. 让用户在 GUI「订阅」页点一下当前订阅卡片重新激活，然后确认两件事：内核正常（`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 有返回）、正常上网没坏（随便 curl 一个网站）。
+脚本会列出要还原的文件、要你确认、并在还原前把当前状态也存一份（回滚本身可后悔）。还原完按它的提示让用户在 GUI 点一次订阅卡片重新激活，然后确认两件事：内核正常（`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 有返回）、正常上网没坏。
+
+⚠️ 别再用「找最早的 .bak 文件复制回去」那套老做法——部署过几次之后，最早那份可能是几个月前的状态，会恢复过头。
 
 回滚完成后，如实告诉用户卡在哪个阶段、日志里的相关报错行，由用户决定重试还是先排障，**不要回滚完立刻自动重试**。
 

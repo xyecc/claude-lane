@@ -16,7 +16,12 @@ if [ -n "$MISSING" ]; then
   exit 1
 fi
 
+# --save-baseline：把这次实测到的真实出口 IP 记为基线，以后每次验证都跟它比
+SAVE_BASELINE=0
+[ "${1:-}" = "--save-baseline" ] && SAVE_BASELINE=1
+
 CFG="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+STATE="$CFG/claude-lane-state.json"
 SOCK="/tmp/verge/verge-mihomo.sock"
 LOG="$CFG/logs/service/service_latest.log"
 GEN="$CFG/clash-verge.yaml"
@@ -126,11 +131,30 @@ if ! curl -sS --max-time 8 --proxy "$PROXY" -o /dev/null https://api.ipify.org 2
   bad "本地代理端口不通（$PROXY），跳过出口双验"
   note "确认 Verge 设置→端口 里开启的端口类型和号码；本脚本按 mixed-port > port > socks-port 顺序自动发现"
 else
-  TRACE_IP=$(curl -sS --max-time 25 --proxy "$PROXY" https://claude.ai/cdn-cgi/trace 2>/dev/null | grep '^ip=' | cut -d= -f2 | tr -d '\r ')
-  if [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$STATIC_IP" ]; then
-    ok "claude.ai 出口 = ${TRACE_IP} <- 静态IP, 正确"
+  TRACE=$(curl -sS --max-time 25 --proxy "$PROXY" https://claude.ai/cdn-cgi/trace 2>/dev/null)
+  TRACE_IP=$(printf '%s' "$TRACE" | grep '^ip=' | cut -d= -f2 | tr -d '\r ')
+  TRACE_LOC=$(printf '%s' "$TRACE" | grep '^loc=' | cut -d= -f2 | tr -d '\r ')
+  # 基线优先：跟【上次部署实测到的真实出口】比。没有基线才退回跟配置里的服务器地址比
+  # （服务商的入口地址不一定等于最终住宅出口 IP，只比那个可能误报，也发现不了出口悄悄换了）
+  BASE_IP=$(python3 -c "
+import json,sys
+try: print(json.load(open('$STATE')).get('claude_exit_ip',''))
+except Exception: print('')" 2>/dev/null)
+  if [ -n "$BASE_IP" ]; then
+    if [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$BASE_IP" ]; then
+      ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 与基线一致"
+    else
+      bad "claude.ai 出口变了：现在 ${TRACE_IP:-请求失败} (${TRACE_LOC:-?})，基线是 ${BASE_IP}"
+      note "静态 IP 换了/到期了？确认无误后用 bash scripts/verify.sh --save-baseline 更新基线"
+    fi
+  elif [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$STATIC_IP" ]; then
+    ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 静态IP, 正确"
+    note "尚未记录出口基线，建议跑一次：bash scripts/verify.sh --save-baseline"
   else
     bad "claude.ai 出口 = ${TRACE_IP:-请求失败}, 应为 ${STATIC_IP}"
+  fi
+  if [ -n "$TRACE_LOC" ] && [ "$TRACE_LOC" != "US" ]; then
+    bad "出口国家是 ${TRACE_LOC}，不是 US（静态 IP 被回收换区了？）"
   fi
   NORM_IP=$(curl -sS --max-time 15 --proxy "$PROXY" https://api.ipify.org 2>/dev/null | tr -d '\r ')
   if [ -n "$NORM_IP" ] && [ "$NORM_IP" != "$STATIC_IP" ]; then
@@ -164,6 +188,27 @@ else
 fi
 
 echo
+# 记录/更新出口基线（只在全绿时写，免得把出错状态记成基线）
+if [ "$SAVE_BASELINE" = "1" ]; then
+  if [ "$FAIL" -eq 0 ] && [ -n "${TRACE_IP:-}" ]; then
+    VERGE_VER=$(plutil -extract CFBundleShortVersionString raw \
+      "/Applications/Clash Verge.app/Contents/Info.plist" 2>/dev/null || echo unknown)
+    python3 - "$STATE" "$TRACE_IP" "${TRACE_LOC:-}" "$VERGE_VER" "$(date '+%F')" <<'PY'
+import json, sys
+state, ip, loc, ver, day = sys.argv[1:6]
+try: d = json.load(open(state))
+except Exception: d = {}
+d.update({"template_version": "1.1.0", "claude_exit_ip": ip, "country": loc,
+          "clash_verge": ver, "baseline_saved_at": day})
+d.setdefault("installed_at", day)
+json.dump(d, open(state, "w"), ensure_ascii=False, indent=2)
+PY
+    printf '\033[32m已记录出口基线：%s (%s) → %s\033[0m\n' "$TRACE_IP" "${TRACE_LOC:-?}" "$STATE"
+  else
+    printf '\033[33m未记录基线：验证没有全绿，或没拿到出口 IP（先把红项修完再记）\033[0m\n'
+  fi
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   printf '\033[32m== 六项全部通过，部署成功 ==\033[0m\n'
 else

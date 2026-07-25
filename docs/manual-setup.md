@@ -51,18 +51,19 @@ cat "$CFG/profiles.yaml"
 
 ## 第 3 步：填模板写进去
 
-**先备份**：
+**先备份**（一条命令，备份进独立的时间戳目录，方便日后精确回滚）：
 
 ```bash
-cd "$CFG/profiles"
-for f in <proxies的uid> <groups的uid> <rules的uid> <merge的uid>; do cp "$f.yaml" "$f.yaml.bak-$(date +%m%d%H%M)"; done
+cd <仓库目录>
+bash scripts/backup.sh "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<groups的uid>.yaml" \
+                       "$CFG/profiles/<rules的uid>.yaml" "$CFG/profiles/<merge的uid>.yaml"
 ```
 
 然后把仓库 `templates/` 下四个模板的内容分别写进对应 uid 文件（原文件里已有你自己的内容就合并，别整个覆盖）：
 
 | 模板 | 写进哪 | 要改什么 |
 |---|---|---|
-| `1-proxies.yaml` | proxies 的 uid 文件 | 填 静态IP四元组。**`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
+| `1-proxies.yaml` | proxies 的 uid 文件 | **别手填**：跑 `bash scripts/set-credentials.sh`（密码隐藏输入、自动定位文件、自动备份）。执意手填的话 **`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
 | `2-groups.yaml` | groups 的 uid 文件 | `US-Chain` 里填第 0 步记下的美国节点名，**逐字一致** |
 | `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前） |
 | `4-merge.yaml` | merge 的 uid 文件 | sniffer 段照抄（文件里已有别的顶层配置就保留、追加） |
@@ -82,10 +83,10 @@ tail -20 "$CFG/logs/service/service_latest.log" | grep -i "Start TUN listening e
 ## 第 5 步：验证
 
 ```bash
-bash scripts/verify.sh
+bash scripts/verify.sh --save-baseline
 ```
 
-**六项全绿才算完成。** 有红项按脚本提示对照 `docs/troubleshooting.md` 修，修完重跑。
+**六项全绿才算完成**（`--save-baseline` 会把实测出口 IP 记为基线，以后 `bash scripts/verify.sh` 就跟它比）。 有红项按脚本提示对照 `docs/troubleshooting.md` 修，修完重跑。
 
 ## 第 6 步：收尾
 
@@ -96,11 +97,10 @@ bash scripts/verify.sh
 
 ## 搞砸了怎么回滚
 
-第 3 步的备份就是后悔药（同一文件多份备份时取**时间最早**的 = 部署前原状）：
+第 3 步的备份就是后悔药，一条命令回滚**最近一次**部署：
 
 ```bash
-ls -lt "$CFG/profiles/"*.bak-*
-cp "$CFG/profiles/<uid>.yaml.bak-<最早时间>" "$CFG/profiles/<uid>.yaml"
+bash scripts/rollback.sh          # 回滚最近一次（--list 看所有备份点）
 ```
 
-复制回去后在 GUI「订阅」页再点一次订阅卡片激活，确认能正常上网即恢复原状。
+脚本会先列出要还原的文件让你确认，还原前也会把当前状态存一份。还原完在 GUI「订阅」页点一次订阅卡片激活，确认能正常上网即恢复原状。
