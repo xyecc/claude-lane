@@ -14,7 +14,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 
 ## v1.3.0 当前状态
 
-本版加入 manifest 驱动的确定性 `bootstrap.sh` 与 `bootstrap.ps1`。固定上游基线为 Claude Code `2.1.212`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel 与 Windows ARM64 / x64。阿里云私有 OSS 主存储已经过最小权限验证，但备用国内源、私有下载网关、Windows 真机签名证据和 lane 归档仍未齐，因此 stable **保持阻断**。
+本版加入 manifest 驱动的确定性 `bootstrap.sh` 与 `bootstrap.ps1`。固定上游基线为 Claude Code `2.1.212`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel 与 Windows ARM64 / x64。阿里云私有 OSS 主存储已经过最小权限验证，但备用国内源、私有下载网关和 Windows 真机签名证据仍未齐，因此 stable **保持阻断**。
 
 因此：
 

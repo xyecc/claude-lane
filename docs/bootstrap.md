@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-`bootstrap.sh` 与 `bootstrap.ps1` 是 manifest 驱动的确定性启动器框架。当前已固定 Claude Code `2.1.212` 和 Clash Verge Rev `2.5.2` 的 macOS / Windows 双架构官方摘要；阿里云私有 OSS 主存储可上传。备用国内源、受控下载网关、lane 归档和 Windows x64 / ARM64 真机 Authenticode 证据仍未齐，因此 `manifests/stable.json` 继续处于门禁状态。
+`bootstrap.sh` 与 `bootstrap.ps1` 是 manifest 驱动的确定性启动器框架。当前已固定 Claude Code `2.1.212` 和 Clash Verge Rev `2.5.2` 的 macOS / Windows 双架构官方摘要，并已构建 macOS tar.gz 与 Windows ZIP；阿里云私有 OSS 主存储可上传。备用国内源、受控下载网关和 Windows x64 / ARM64 真机 Authenticode 证据仍未齐，因此 `manifests/stable.json` 继续处于门禁状态。
 
 启动器发现示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或哈希不一致时，必须在修改系统前停止。现在没有公开的 `curl | bash` 地址，也没有已经验收的离线包。不要删除校验、填写随意哈希或临时改用第三方镜像绕过门禁。
 
