@@ -31,6 +31,7 @@ if ! /usr/bin/grep -Eq '(ACCESS_KEY_SECRET=.{8,}|ANTHROPIC_AUTH_TOKEN=.{8,}|sk-[
 if ! /usr/bin/grep -Eq 'downloads\.claude\.ai|github\.com|npmjs|brew\.sh|homebrew' "$REPO_ROOT/bootstrap.sh"; then ok "客户端启动器不含官方海外下载域名"; else bad "客户端启动器不含官方海外下载域名"; fi
 if /usr/bin/grep -Fq 'manifests/stable.json and publisher tooling also avoids a circular digest' "$SCRIPT_DIR/build-lane.sh" &&
    /usr/bin/grep -Fq -- "--mtime='1970-01-01T00:00:00Z'" "$SCRIPT_DIR/build-lane.sh" &&
+   /usr/bin/grep -Fq 'HEAD_TREE=$(git rev-parse' "$SCRIPT_DIR/build-lane.sh" &&
    /usr/bin/grep -Fq 'scripts/set-credentials.sh scripts/verify.sh templates' "$SCRIPT_DIR/build-lane.sh"; then
   ok "lane 归档使用运行时白名单并规避清单哈希循环"
 else

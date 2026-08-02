@@ -34,11 +34,14 @@ head_version=$(git show HEAD:VERSION 2>/dev/null | /usr/bin/tr -d '\r\n ') || mi
 [ "$head_version" = "$MIRROR_VERSION" ] || mirror_die "HEAD VERSION does not match requested release"
 /bin/mkdir -p "$DEST" || mirror_die "cannot create lane artifact directory"
 [ ! -e "$DEST/claude-lane.tar.gz" ] || mirror_die "lane archive already exists; immutable output will not be overwritten"
+HEAD_TREE=$(git rev-parse 'HEAD^{tree}') || mirror_die "cannot resolve release tree"
 # Only runtime files enter the target machine. Excluding bootstrap.sh,
 # manifests/stable.json and publisher tooling also avoids a circular digest:
 # the outer bootstrap pins the manifest, while the manifest pins this archive.
+# Archiving the tree object (not the commit) avoids Git embedding a commit ID
+# in the PAX header, so manifest-only commits do not perturb runtime bytes.
 git archive --format=tar --mtime='1970-01-01T00:00:00Z' \
-  --prefix="claude-lane-$MIRROR_VERSION/" HEAD -- \
+  --prefix="claude-lane-$MIRROR_VERSION/" "$HEAD_TREE" -- \
   VERSION LICENSE README.md RUNBOOK.md CLAUDE.md AGENTS.md QWEN.md \
   docs/account-safety.md docs/iphone-notes.md docs/manual-setup.md \
   docs/porting.md docs/troubleshooting.md \
@@ -46,6 +49,6 @@ git archive --format=tar --mtime='1970-01-01T00:00:00Z' \
   scripts/profile-config.sh scripts/rollback.sh scripts/selftest.sh \
   scripts/set-credentials.sh scripts/verify.sh templates |
   /usr/bin/gzip -n >"$DEST/claude-lane.tar.gz" || mirror_die "cannot build lane tarball"
-printf 'commit=%s\ntar_sha256=%s\n' \
-  "$(git rev-parse HEAD)" "$(mirror_sha256 "$DEST/claude-lane.tar.gz")" >"$DEST/evidence.txt"
+printf 'commit=%s\ntree=%s\ntar_sha256=%s\n' \
+  "$(git rev-parse HEAD)" "$HEAD_TREE" "$(mirror_sha256 "$DEST/claude-lane.tar.gz")" >"$DEST/evidence.txt"
 mirror_say "built immutable lane archives from commit $(git rev-parse --short HEAD)"
