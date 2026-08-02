@@ -6,6 +6,31 @@
 
 ---
 
+## v1.3.0 — 2026-08-01
+
+**启动链路（框架已落地，分发尚未发布）**
+
+- 镜像矩阵固定为 Claude Code `2.1.212` 与 Clash Verge Rev `2.5.2` 的 macOS Apple Silicon / Intel 制品，并同步 GPL 许可证和官方源码元数据
+- 新增 `scripts/mirror/` 发布工具：默认 dry-run 的官方抓取、GPG / codesign / Gatekeeper 验证、候选清单生成、OSS 不覆盖上传和显式 stable 晋级
+- 新增 `scripts/mirror/selftest.sh`，覆盖清单阻断、不可变路径、固定摘要、OSS 不覆盖和客户端无海外下载源检查
+- 新增 Bash 3.2 兼容的 `bootstrap.sh`、`manifests/stable.json` 和 `scripts/bootstrap-selftest.sh`：manifest 固定版本、相对路径与 SHA-256，启动器发布块固化国内主备源和 manifest 自身摘要；目标机不依赖 Git、Homebrew、Node.js、Python 3 或 `jq`
+- 所有下载字段执行失败关闭：示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或校验失败都会在修改系统前停止，不会降级到未知版本或第三方镜像
+- DeepSeek 安装 Key 从终端隐藏读取，只传给临时 Claude Code 子进程；模型固定为 `deepseek-v4-flash`、推理强度 `max`，并由 `trap` 负责退出清理
+- 当前仓库**尚未配置真实国内主备源、固定版 Claude Code 分发产物和全部正式哈希**；没有发布公开 `curl | bash` 地址、离线包，也未宣称完成无代理干净 Mac 端到端验收
+
+**执行手册与隐私**
+
+- 新增 Agent 无关的唯一权威手册 `RUNBOOK.md`；`CLAUDE.md` 精简为默认入口，新增 `AGENTS.md` 与 `QWEN.md` 兼容入口
+- 机场订阅链接改为只能由用户直接粘贴到 Clash Verge GUI；静态 IP 四元组继续只走本地隐藏输入；Agent 不得主动读取、回显或要求把秘密贴进对话
+- Phase 6 增加 DeepSeek 子进程退出、启动器清理临时环境 / 配置 / 会话 / 日志，以及用户最后才进入正常 Claude 登录流程的门禁
+- 新增 `docs/bootstrap.md`，记录 manifest、签名、国内对象存储、离线包和发布门禁
+
+**移除 Python 隐藏依赖**
+
+- 新增 `scripts/macos-json.js`，使用 macOS 自带 JXA 处理 JSON、YAML 标量转义、profiles 定位和状态基线
+- `set-credentials.sh` 与 `verify.sh` 不再依赖 Python 3；静态四元组通过 stdin 传给辅助程序，不进入命令参数或环境变量
+- `selftest.sh` 当前 74/74 通过；`bootstrap-selftest.sh` 当前覆盖 46 项，包括严格 profiles 解析、发布门禁、Bash 3.2、Key argv 隔离、Claude codesign 身份、settings/MCP 隔离、权限确认、子进程环境剥离、归档逃逸、原子安装、包内容门禁、干净正常登录和 Phase 6 双重完成判据
+
 ## v1.2.1 — 2026-07-26
 
 **修复 `rollback.sh` 的回滚快照（撤销回滚在 v1.2.0 是坏的）**

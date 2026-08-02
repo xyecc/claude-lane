@@ -1,13 +1,15 @@
 # 手动部署手册（写给人）
 
-不想用 agent、或者想亲手做一遍搞懂原理的，照这页走。内容和 `CLAUDE.md`（agent 版）完全等价，只是换成人话 + 你自己敲命令。全程约 20–30 分钟。
+不想用 Agent、或者想亲手做一遍搞懂原理的，照这页走。权威 Agent 流程现位于根目录 `RUNBOOK.md`；本页保留人工部署路径。全程约 20–30 分钟。
 
-前提：Clash Verge Rev 已装好、机场订阅已导入。还没装的：`brew install --cask clash-verge-rev` 装上 → 打开「订阅」页粘贴你的机场订阅链接导入 → 设置里开 TUN、保持规则模式（原来用别的代理软件的，必须先退出卸载）。
+前提：Clash Verge Rev 已装好、机场订阅已导入。还没装的：从 [Clash Verge Rev 官方 Releases](https://github.com/clash-verge-rev/clash-verge-rev/releases) 下载对应架构的正式版 DMG，确认 macOS 签名后安装；不要依赖 Homebrew 或第三方镜像。然后在「订阅」页直接粘贴链接、打开 TUN、保持规则模式；原代理软件必须先退出。无代理机器的国内安装要等 [`docs/bootstrap.md`](bootstrap.md) 所列分发门禁通过。
 
-约定：下文 `$CFG` 指 Clash Verge Rev 的配置目录：
+先 `cd <仓库目录>`；下文命令都从仓库根目录执行。`$CFG` 指 Clash Verge Rev 的配置目录：
 
 ```bash
 CFG="$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+export CLAUDE_LANE_DEPLOY_ID=$(date +%Y%m%d-%H%M%S)
+printf '本次 deployment id：%s\n' "$CLAUDE_LANE_DEPLOY_ID"
 ```
 
 ---
@@ -24,7 +26,8 @@ pgrep -fl verge-mihomo
 grep -A2 '^tun:' "$CFG/clash-verge.yaml" | head -3; grep '^mode:' "$CFG/clash-verge.yaml"
 
 # ③ 订阅里有美国节点（在输出里找 美国/US/🇺🇸/Los Angeles 等；注意 US 会误匹配 AUS/RUS）
-curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies | python3 -m json.tool | grep '"name"' | sort -u
+curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies \
+  | /usr/bin/osascript -l JavaScript scripts/macos-json.js proxy-names
 
 # ④ 没有别的 VPN 在跑（除 Tailscale 外不该有 Connected；有就先断开，见排障手册第 1 条）
 scutil --nc list
@@ -41,13 +44,24 @@ scutil --nc list
 ## 第 2 步：找到四个增强文件
 
 ```bash
-cat "$CFG/profiles.yaml"
+# 只输出安全摘要，不显示订阅 URL、订阅名或 profiles 原文
+bash scripts/profile-config.sh summary
 ```
 
-- 顶部 `current:` 是当前激活订阅的 uid
-- 找到该订阅条目下的 `option:` 段，记下 `proxies` / `groups` / `rules` / `merge` 四个 uid——对应文件就是 `$CFG/profiles/<uid>.yaml`
+- `current_uid` 是当前激活订阅的 uid；`current_type` 必须是 `remote`
+- `options` 给出 `proxies` / `groups` / `rules` / `merge` 四个 uid；对应文件是 `$CFG/profiles/<uid>.yaml`
 
-**option 里缺某个 uid？** 说明那个增强文件还没创建过：打开 Clash Verge → 左侧「订阅」→ 右键当前订阅卡片 → 分别点「编辑节点 / 编辑分组 / 编辑规则 / 编辑 Merge」→ 什么都不改直接保存退出（目的是让 GUI 生成空文件）→ 重新看 `profiles.yaml`。
+**summary 的 `missing` 里有类型？** 用同一个 deployment id 逐项登记：
+
+```bash
+CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/profile-config.sh register proxies
+CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/profile-config.sh register groups
+CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/profile-config.sh register rules
+CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/profile-config.sh register merge
+bash scripts/profile-config.sh summary
+```
+
+只执行缺失类型。脚本会先备份再创建；不要直接打开或打印 `profiles.yaml`。
 
 ## 第 3 步：填模板写进去
 
@@ -55,7 +69,8 @@ cat "$CFG/profiles.yaml"
 
 ```bash
 cd <仓库目录>
-bash scripts/backup.sh "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<groups的uid>.yaml" \
+CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/backup.sh "$CFG/profiles.yaml" \
+                       "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<groups的uid>.yaml" \
                        "$CFG/profiles/<rules的uid>.yaml" "$CFG/profiles/<merge的uid>.yaml"
 ```
 
@@ -63,7 +78,7 @@ bash scripts/backup.sh "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<grou
 
 | 模板 | 写进哪 | 要改什么 |
 |---|---|---|
-| `1-proxies.yaml` | proxies 的 uid 文件 | **别手填**：跑 `bash scripts/set-credentials.sh`（密码隐藏输入、自动定位文件、自动备份）。执意手填的话 **`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
+| `1-proxies.yaml` | proxies 的 uid 文件 | **别手填**：跑 `CLAUDE_LANE_DEPLOY_ID="$CLAUDE_LANE_DEPLOY_ID" bash scripts/set-credentials.sh`（四项均隐藏输入、自动定位文件、自动备份）。**`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能少** |
 | `2-groups.yaml` | groups 的 uid 文件 | `US-Chain` 里填第 0 步记下的美国节点名，**逐字一致** |
 | `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前） |
 | `4-merge.yaml` | merge 的 uid 文件 | sniffer 段照抄（文件里已有别的顶层配置就保留、追加） |
@@ -100,7 +115,7 @@ bash scripts/verify.sh --save-baseline
 第 3 步的备份就是后悔药，一条命令回滚**最近一次**部署：
 
 ```bash
-bash scripts/rollback.sh          # 回滚最近一次（--list 看所有备份点）
+bash scripts/rollback.sh "$CLAUDE_LANE_DEPLOY_ID"
 ```
 
 脚本会先列出要还原的文件让你确认，还原前也会把当前状态存一份。还原完在 GUI「订阅」页点一次订阅卡片激活，确认能正常上网即恢复原状。

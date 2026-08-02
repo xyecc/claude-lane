@@ -42,7 +42,7 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 
 ## 3. 直连测试 静态 IP 失败：`Can't complete SOCKS5 connection`
 
-**症状**：`curl --socks5-hostname 'user:pass@host:port' https://api.ipify.org` 超时或报 SOCKS5 错误。
+**症状**：把静态代理四元组直接拼进 curl 参数做直连测试时，出现超时或 SOCKS5 错误。不要这样测试：凭证会进入 Shell 历史和进程参数。
 
 **原因**：**这是正常的**。美国静态住宅 IP 通常只接受美国来源的连接，从国内（或经日本等非美节点）直连会被拒。这正是必须用 `dialer-proxy` 链式（先到机场美国节点再连 静态IP）的原因。
 
@@ -128,6 +128,7 @@ grep -iE 'datadoghq|statsig' "$HOME/Library/Application Support/io.github.clash-
 bash scripts/verify.sh
 # 看某条流量实际命中了哪条规则（跑一次 Claude 后看日志尾部）
 tail -50 "$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/logs/service/service_latest.log" | grep -iE "claude|anthropic"
-# 策略组当前指向
-curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies | python3 -m json.tool | grep -A2 '"Claude"'
+# Claude / US-Chain 当前选择（只输出组名与所选节点，不 dump 完整 API JSON）
+curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies \
+  | /usr/bin/osascript -l JavaScript scripts/macos-json.js verify-proxies
 ```

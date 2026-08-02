@@ -6,7 +6,7 @@
 
 ## 一、环境变量：别乱设遥测开关
 
-**结论：本方案不设置任何遥测相关环境变量，你也不要设。**
+**结论：本方案不把遥测相关环境变量持久化到用户环境。** bootstrap 只在隔离的安装子进程中临时关闭非必要流量，并在 Phase 6 清理；日常环境不要长期设置。
 
 ### `DISABLE_TELEMETRY=1` 是什么（官方文档）
 
@@ -28,13 +28,20 @@ Claude Code 官方环境变量参考里明确写着：设为 1 会退出遥测�
 2. 万一你以前设过：删掉之后**先歇一会儿再跑重活**，别"刚改完立刻开大任务"
 3. 自查三处（都设过才算干净）：
 
+> v1.3.0 bootstrap 会在隔离的安装子进程中临时设置 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`，并在 Phase 6 清理；这不等于建议写入用户长期配置。
+
 ```bash
-env | grep -iE 'telemetry|nonessential|do_not_track'          # 当前 shell
-python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/settings.json'))).get('env',{}))"   # 全局设置
-grep -inE 'telemetry|nonessential|do_not_track' ~/.zshrc ~/.zprofile ~/.zshenv 2>/dev/null   # shell 启动文件
+[ "${DISABLE_TELEMETRY+x}" = x ] && echo DISABLE_TELEMETRY
+[ "${DO_NOT_TRACK+x}" = x ] && echo DO_NOT_TRACK
+[ "${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC+x}" = x ] && echo CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+# 全局设置：只打印匹配的键名和冒号，不打印任何值 / API Key
+grep -ioE '"[^"[:space:]]*(telemetry|nonessential|do_not_track)[^"]*"[[:space:]]*:' \
+  "$HOME/.claude/settings.json" 2>/dev/null
+grep -hioE 'DISABLE_TELEMETRY|DO_NOT_TRACK|CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC' \
+  ~/.zshrc ~/.zprofile ~/.zshenv 2>/dev/null | sort -u
 ```
 
-三条都没输出（或输出空 `{}`）= 干净。也可以直接跑 `claude doctor`，它会报告功能标志校验是否被禁用。
+三组都没输出 = 没发现持久化开关。也可以直接跑 `claude doctor`，它会报告功能标志校验是否被禁用。
 
 ---
 
