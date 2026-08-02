@@ -60,7 +60,7 @@ try {
         Fail "DeepSeek 临时会话隔离工具并清理配置" "工具或清理静态门禁未满足"
     }
     $LocalRcText = Get-Content -LiteralPath $LocalRc -Raw
-    if ($LocalRcText -match 'bootstrap-windows-selftest\.ps1' -and $LocalRcText -match 'windows-deepseek\.ps1' -and $LocalRcText -match 'start-deepseek\.cmd' -and $LocalRcText -match '& \$LauncherTarget') {
+    if ($LocalRcText -match 'windows-validation\.ps1' -and $LocalRcText -match 'VALIDATION PASSED' -and $LocalRcText -match 'windows-deepseek\.ps1' -and $LocalRcText -match 'start-deepseek\.cmd' -and $LocalRcText -match '& \$LauncherTarget') {
         Pass "离线 RC 安装并启动固定 DeepSeek 入口"
     } else {
         Fail "离线 RC 安装并启动固定 DeepSeek 入口" "RC 未接入启动器"
