@@ -63,6 +63,14 @@ $env:PROCESSOR_ARCHITECTURE
 powershell.exe -NoProfile -File .\scripts\windows-validation.ps1
 ```
 
+需要同时试装本地 RC 时，在验证通过后运行：
+
+```powershell
+powershell.exe -NoProfile -File .\scripts\windows-local-rc.ps1
+```
+
+该入口从包内固定制品安装 Claude Code 和 claude-lane，并启动已验签的 Clash Verge Rev 安装器；它不下载、不登录、不自动修改 Windows 专线路由。成功标志为 `RC INSTALL PASSED`。
+
 一台机器只记录自身原生架构。成功标志为：
 
 ```text

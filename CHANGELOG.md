@@ -15,6 +15,7 @@
 - 新增 `scripts/mirror/` 发布工具：默认 dry-run 的官方抓取、GPG / codesign / Gatekeeper / minisign 验证、候选清单生成、OSS 不覆盖上传和显式 stable 晋级
 - 新增 `scripts/bootstrap-windows-selftest.ps1` 与 `scripts/mirror/selftest.sh`；macOS 启动器也会验证 Windows 双架构字段和签名证据，防止发布不完整矩阵
 - 新增双架构 Windows 真机验证包、统一 PowerShell 入口和非秘密审计 JSON；修正 ARM64 Windows 上 x64 兼容 PowerShell 的架构识别
+- 新增验证包内的 Windows 离线 RC 试装入口：固定制品验签后安装 Claude Code 与 claude-lane，并启动 Clash Verge Rev 安装器；不下载、不登录、不修改路由
 - 新增 Bash 3.2 兼容的 `bootstrap.sh`、`manifests/stable.json` 和 `scripts/bootstrap-selftest.sh`：manifest 固定版本、相对路径与 SHA-256，启动器发布块固化国内主备源和 manifest 自身摘要；目标机不依赖 Git、Homebrew、Node.js、Python 3 或 `jq`
 - 所有下载字段执行失败关闭：示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或校验失败都会在修改系统前停止，不会降级到未知版本或第三方镜像
 - DeepSeek 安装 Key 从终端隐藏读取，只传给临时 Claude Code 子进程；模型固定为 `deepseek-v4-flash`、推理强度 `max`，并由 `trap` 负责退出清理

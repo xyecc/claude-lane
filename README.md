@@ -157,6 +157,7 @@ bash scripts/rollback.sh <deployment-id>
 | `scripts/bootstrap-selftest.sh` | bootstrap 失败关闭与恢复测试 |
 | `scripts/bootstrap-windows-selftest.ps1` | Windows 清单与签名证据失败关闭测试 |
 | `scripts/windows-validation.ps1` | Windows 真机验签、自测与非秘密审计证据入口 |
+| `scripts/windows-local-rc.ps1` | Windows 离线候选包的固定制品验签与本地试装入口 |
 | `scripts/mirror/build-windows-validation-bundle.sh` | 生成可搬运的双架构 Windows 验证包 |
 | `scripts/mirror/` | macOS 发布机镜像抓取、验证、清单、OSS 上传和人工晋级工具 |
 | `scripts/bootstrap-complete.sh` | Phase 6 非秘密完成标记；仍需父启动器独立六项复验 |
