@@ -21,6 +21,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 - 启动器遇到示例域名、`TBD`、空值或非 64 位 SHA-256 时会在修改系统前安全停止；
 - 目前没有可公开复制的国内 `curl | bash` 安装命令；
 - 正式制品、备用源、离线包、Windows 双架构真机和无代理干净 Mac 端到端验收尚未全部完成；
+- 发布者验证包可在 Windows 真机离线验签、试装并临时连接 DeepSeek，但不是 stable 用户下载入口，也不自动配置 Windows 专线路由；
 - 不要删掉校验或临时换第三方镜像来绕过门禁。
 
 分发清单、签名、对象存储和发布门禁见 [`docs/bootstrap.md`](docs/bootstrap.md)。当前可先审阅 [`RUNBOOK.md`](RUNBOOK.md)，或在已有 Clash Verge 环境上使用 [`docs/manual-setup.md`](docs/manual-setup.md)。
@@ -158,6 +159,7 @@ bash scripts/rollback.sh <deployment-id>
 | `scripts/bootstrap-windows-selftest.ps1` | Windows 清单与签名证据失败关闭测试 |
 | `scripts/windows-validation.ps1` | Windows 真机验签、自测与非秘密审计证据入口 |
 | `scripts/windows-local-rc.ps1` | Windows 离线候选包的固定制品验签与本地试装入口 |
+| `scripts/windows-deepseek.ps1` | Windows 本地隐藏读取 Key、握手并启动隔离 DeepSeek Claude 会话 |
 | `scripts/mirror/build-windows-validation-bundle.sh` | 生成可搬运的双架构 Windows 验证包 |
 | `scripts/mirror/` | macOS 发布机镜像抓取、验证、清单、OSS 上传和人工晋级工具 |
 | `scripts/bootstrap-complete.sh` | Phase 6 非秘密完成标记；仍需父启动器独立六项复验 |

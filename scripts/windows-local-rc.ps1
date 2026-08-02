@@ -9,6 +9,7 @@ $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 $WorkDir = Join-Path $RepoRoot ".mirror-work"
 $ManifestPath = Join-Path $RepoRoot "manifests\stable.json"
 $Manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+$SelfTestPath = Join-Path $RepoRoot "scripts\bootstrap-windows-selftest.ps1"
 
 function Stop-Rc([string]$Message) { throw "停止：$Message" }
 function Get-Sha256([string]$Path) { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
@@ -36,6 +37,10 @@ function Assert-ZipEntries([string]$ZipPath, [string]$ExpectedRoot) {
 if (-not [Environment]::Is64BitOperatingSystem) { Stop-Rc "只支持 64 位 Windows" }
 if ([Environment]::OSVersion.Version -lt [Version]"10.0.17763") { Stop-Rc "需要 Windows 10 1809 或更高版本" }
 if ([int]$Manifest.schema -ne 1 -or [string]$Manifest.claude_lane.version -ne "1.3.0" -or [string]$Manifest.claude_code.version -ne "2.1.212" -or [string]$Manifest.clash_verge.version -ne "2.5.2") { Stop-Rc "固定版本清单不匹配" }
+if (-not (Test-Path -LiteralPath $SelfTestPath -PathType Leaf)) { Stop-Rc "验证包缺少 Windows 自测脚本" }
+$SelfTestOutput = (& powershell.exe -NoProfile -File $SelfTestPath 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { Stop-Rc "Windows RC 自测失败：$SelfTestOutput" }
+Write-Output ($SelfTestOutput -split '\r?\n' | Select-Object -Last 1)
 
 $Architecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
 switch -Regex ($Architecture.ToUpperInvariant()) {
@@ -116,3 +121,18 @@ if ($KnownClash.Count -eq 0) {
 Write-Output "RC INSTALL PASSED: $Platform"
 Write-Output "Claude Code path: $ClaudeTarget"
 Write-Output "Windows 专线路由尚未自动配置。"
+
+$LauncherSource = Join-Path $RepoRoot "scripts\windows-deepseek.ps1"
+if (-not (Test-Path -LiteralPath $LauncherSource -PathType Leaf)) { Stop-Rc "验证包缺少 DeepSeek 启动器" }
+$LauncherDir = Join-Path $InstallRoot "bin"
+$LauncherTarget = Join-Path $LauncherDir "start-deepseek.ps1"
+$CommandTarget = Join-Path $LauncherDir "start-deepseek.cmd"
+New-Item -ItemType Directory -Force -Path $LauncherDir | Out-Null
+Copy-Item -LiteralPath $LauncherSource -Destination $LauncherTarget -Force
+@'
+@echo off
+powershell.exe -NoProfile -File "%~dp0start-deepseek.ps1"
+'@ | Set-Content -LiteralPath $CommandTarget -Encoding ASCII
+Write-Output "DeepSeek 启动入口：$CommandTarget"
+Write-Output "现在进入 DeepSeek API Key 隐藏输入和文本握手。"
+& $LauncherTarget

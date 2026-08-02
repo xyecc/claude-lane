@@ -69,7 +69,13 @@ powershell.exe -NoProfile -File .\scripts\windows-validation.ps1
 powershell.exe -NoProfile -File .\scripts\windows-local-rc.ps1
 ```
 
-该入口从包内固定制品安装 Claude Code 和 claude-lane，并启动已验签的 Clash Verge Rev 安装器；它不下载、不登录、不自动修改 Windows 专线路由。成功标志为 `RC INSTALL PASSED`。
+该入口从包内固定制品安装 Claude Code 和 claude-lane，启动已验签的 Clash Verge Rev 安装器，然后在本机隐藏读取 DeepSeek API Key、完成文本握手并进入临时 Claude Code 会话。它不下载、不登录 Anthropic、不自动修改 Windows 专线路由。成功标志为 `RC INSTALL PASSED`，随后出现 DeepSeek Key 隐藏输入。
+
+DeepSeek 会话只开放 Read/Edit/Write，不开放 Bash；Key 只进入 Claude 子进程环境，不写当前 PowerShell 环境、参数、文件或历史。退出后自动删除临时配置。以后再次启动：
+
+```powershell
+& "$env:LOCALAPPDATA\claude-lane\bin\start-deepseek.cmd"
+```
 
 一台机器只记录自身原生架构。成功标志为：
 

@@ -3,6 +3,8 @@ Set-StrictMode -Version 2.0
 
 $RepoRoot = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..")).Path
 $Bootstrap = Join-Path $RepoRoot "bootstrap.ps1"
+$DeepSeekLauncher = Join-Path $RepoRoot "scripts\windows-deepseek.ps1"
+$LocalRc = Join-Path $RepoRoot "scripts\windows-local-rc.ps1"
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-windows-selftest-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $TempRoot | Out-Null
 $Passed = 0
@@ -16,6 +18,12 @@ $IsArm64 = $Architecture.ToUpperInvariant() -eq "ARM64"
 
 function Pass([string]$Name) { $script:Passed++; Write-Output "PASS  $Name" }
 function Fail([string]$Name, [string]$Detail) { $script:Failed++; Write-Output "FAIL  $Name`n      $Detail" }
+function Test-PowerShellSyntax([string]$Name, [string]$Path) {
+    $Tokens = $null
+    $Errors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors)
+    if ($Errors.Count -eq 0) { Pass $Name } else { Fail $Name (($Errors | ForEach-Object { $_.Message }) -join "; ") }
+}
 function Invoke-Case([string]$Name, [object]$Manifest, [bool]$ShouldPass, [string]$Expected) {
     $Path = Join-Path $TempRoot (([guid]::NewGuid().ToString("N")) + ".json")
     $Manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $Path -Encoding UTF8
@@ -31,6 +39,33 @@ function Invoke-Case([string]$Name, [object]$Manifest, [bool]$ShouldPass, [strin
 }
 
 try {
+    Test-PowerShellSyntax "Windows DeepSeek 启动器语法" $DeepSeekLauncher
+    Test-PowerShellSyntax "Windows 离线 RC 语法" $LocalRc
+    $DeepSeekText = Get-Content -LiteralPath $DeepSeekLauncher -Raw
+    if ($DeepSeekText -match 'Read-Host\s+"DeepSeek API Key"\s+-AsSecureString' -and
+        $DeepSeekText -match 'SecureStringToBSTR' -and $DeepSeekText -match 'ZeroFreeBSTR' -and
+        $DeepSeekText -match 'EnvironmentVariables\["ANTHROPIC_AUTH_TOKEN"\]' -and
+        $DeepSeekText -notmatch '\$env:ANTHROPIC_AUTH_TOKEN\s*=' -and
+        $DeepSeekText -notmatch '\.Arguments\s*=.*AuthToken') {
+        Pass "DeepSeek Key 隐藏输入且不进入当前环境或 argv"
+    } else {
+        Fail "DeepSeek Key 隐藏输入且不进入当前环境或 argv" "安全注入静态门禁未满足"
+    }
+    if ($DeepSeekText -match '--tools\s+"Read,Edit,Write"' -and
+        $DeepSeekText -notmatch '--tools\s+"Bash' -and
+        $DeepSeekText -match 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB' -and
+        $DeepSeekText -match 'Remove-Item -LiteralPath \$TempConfig -Recurse') {
+        Pass "DeepSeek 临时会话隔离工具并清理配置"
+    } else {
+        Fail "DeepSeek 临时会话隔离工具并清理配置" "工具或清理静态门禁未满足"
+    }
+    $LocalRcText = Get-Content -LiteralPath $LocalRc -Raw
+    if ($LocalRcText -match 'bootstrap-windows-selftest\.ps1' -and $LocalRcText -match 'windows-deepseek\.ps1' -and $LocalRcText -match 'start-deepseek\.cmd' -and $LocalRcText -match '& \$LauncherTarget') {
+        Pass "离线 RC 安装并启动固定 DeepSeek 入口"
+    } else {
+        Fail "离线 RC 安装并启动固定 DeepSeek 入口" "RC 未接入启动器"
+    }
+
     $Manifest = [ordered]@{
         schema = 1; release_status = "released"; minimum_windows = "10.0.17763"; required_free_mb = 2048
         claude_lane = [ordered]@{ version = "1.3.0"; windows_path = "claude-lane/releases/v1.3.0/claude-lane.zip"; archive_root = "claude-lane-1.3.0"; windows_sha256 = ("1" * 64) }

@@ -41,8 +41,12 @@ if /bin/bash -n "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" 2>&1 | /usr/bin/grep -Fq 'dry-run: no bundle created' &&
    /usr/bin/grep -Fq 'scripts/windows-validation.ps1' "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /usr/bin/grep -Fq 'scripts/windows-local-rc.ps1' "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
+   /usr/bin/grep -Fq 'scripts/windows-deepseek.ps1' "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /usr/bin/grep -Fq 'VALIDATION PASSED' "$REPO_ROOT/scripts/windows-validation.ps1" &&
    /usr/bin/grep -Fq 'RC INSTALL PASSED' "$REPO_ROOT/scripts/windows-local-rc.ps1" &&
+   /usr/bin/grep -Fq 'SecureStringToBSTR' "$REPO_ROOT/scripts/windows-deepseek.ps1" &&
+   /usr/bin/grep -Fq 'ZeroFreeBSTR' "$REPO_ROOT/scripts/windows-deepseek.ps1" &&
+   /usr/bin/grep -Fq "printf '\\357\\273\\277'" "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /usr/bin/grep -Fq 'bootstrap_selftest.passed' "$SCRIPT_DIR/generate-manifest.sh" &&
    /usr/bin/grep -Fq 'host.manifest_sha256' "$SCRIPT_DIR/generate-manifest.sh"; then
   ok "Windows 真机验证包默认 dry-run，审计证据绑定固定清单与自测"

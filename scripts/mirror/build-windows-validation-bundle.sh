@@ -69,6 +69,14 @@ verify_expected_file() {
   [ "$(mirror_sha256 "$source_file")" = "$expected" ] || mirror_die "SHA-256 mismatch for $label"
 }
 
+stage_powershell() {
+  source_file=$1
+  destination_file=$2
+  # Windows PowerShell 5.1 treats UTF-8 without BOM as the local ANSI codepage.
+  # All tracked sources are UTF-8 without BOM; the transport bundle adds one.
+  (printf '\357\273\277'; /bin/cat "$source_file") >"$destination_file" || mirror_die "cannot stage PowerShell script: $source_file"
+}
+
 WIN_CLAUDE_ARM64="$CLAUDE_DIR/claude-win32-arm64.exe"
 WIN_CLAUDE_X64="$CLAUDE_DIR/claude-win32-x64.exe"
 WIN_CLASH_ARM64="$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe"
@@ -104,11 +112,12 @@ BUNDLE_ROOT="$STAGE_PARENT/claude-lane-windows-validation"
   "$BUNDLE_ROOT/.mirror-work/claude-lane/releases/v$LANE_VERSION" || mirror_die "cannot create bundle layout"
 
 /bin/cp "$MANIFEST" "$BUNDLE_ROOT/manifests/stable.json" || mirror_die "cannot stage manifest"
-/bin/cp "$MIRROR_REPO_ROOT/bootstrap.ps1" "$BUNDLE_ROOT/bootstrap.ps1" || mirror_die "cannot stage Windows bootstrap"
-/bin/cp "$MIRROR_REPO_ROOT/scripts/bootstrap-windows-selftest.ps1" "$BUNDLE_ROOT/scripts/bootstrap-windows-selftest.ps1" || mirror_die "cannot stage bootstrap self-test"
-/bin/cp "$MIRROR_REPO_ROOT/scripts/windows-validation.ps1" "$BUNDLE_ROOT/scripts/windows-validation.ps1" || mirror_die "cannot stage validation entrypoint"
-/bin/cp "$MIRROR_REPO_ROOT/scripts/windows-local-rc.ps1" "$BUNDLE_ROOT/scripts/windows-local-rc.ps1" || mirror_die "cannot stage local RC installer"
-/bin/cp "$MIRROR_REPO_ROOT/scripts/mirror/verify-artifacts.ps1" "$BUNDLE_ROOT/scripts/mirror/verify-artifacts.ps1" || mirror_die "cannot stage artifact verifier"
+stage_powershell "$MIRROR_REPO_ROOT/bootstrap.ps1" "$BUNDLE_ROOT/bootstrap.ps1"
+stage_powershell "$MIRROR_REPO_ROOT/scripts/bootstrap-windows-selftest.ps1" "$BUNDLE_ROOT/scripts/bootstrap-windows-selftest.ps1"
+stage_powershell "$MIRROR_REPO_ROOT/scripts/windows-validation.ps1" "$BUNDLE_ROOT/scripts/windows-validation.ps1"
+stage_powershell "$MIRROR_REPO_ROOT/scripts/windows-local-rc.ps1" "$BUNDLE_ROOT/scripts/windows-local-rc.ps1"
+stage_powershell "$MIRROR_REPO_ROOT/scripts/windows-deepseek.ps1" "$BUNDLE_ROOT/scripts/windows-deepseek.ps1"
+stage_powershell "$MIRROR_REPO_ROOT/scripts/mirror/verify-artifacts.ps1" "$BUNDLE_ROOT/scripts/mirror/verify-artifacts.ps1"
 /bin/cp "$MIRROR_REPO_ROOT/docs/validation-playbook.md" "$BUNDLE_ROOT/VALIDATION.md" || mirror_die "cannot stage validation guide"
 
 /bin/ln "$WIN_CLAUDE_ARM64" "$BUNDLE_ROOT/.mirror-work/claude-code/releases/$CLAUDE_VERSION/claude-win32-arm64.exe" || mirror_die "cannot stage Claude ARM64"

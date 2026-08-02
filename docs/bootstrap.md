@@ -24,6 +24,8 @@ Agent 不决定下载版本或来源，也不临时搜索镜像。启动阶段�
 
 Windows `bootstrap.ps1` 支持 Windows 10 1809+ 的 x64 / ARM64，只负责固定清单下载、主备切换、SHA-256、Authenticode、版本校验及不覆盖现有安装。它不扩张 macOS 专线 `RUNBOOK.md` 的 Phase -1～6；Windows 分流仍按 `docs/porting.md` 人工处理。启动期间设置 `DISABLE_UPDATES=1` 与 `DISABLE_AUTOUPDATER=1`，不使用执行策略绕过、关闭系统安全或跳过签名。
 
+发布者真机验证包另带 `windows-local-rc.ps1`，用于网关发布前的离线候选试装。它从包内固定制品安装后调用 `windows-deepseek.ps1`：本地隐藏读取 Key、先做固定模型文本握手，再启动仅开放 Read/Edit/Write 的隔离 Claude Code 会话；退出或失败时清理 Key 和临时配置。该入口不是 stable 下载通道，也不代表 Windows 专线路由已经自动化。
+
 ## Manifest 语义
 
 根目录 `manifests/stable.json` 是当前 schema 样例。字段如下：
