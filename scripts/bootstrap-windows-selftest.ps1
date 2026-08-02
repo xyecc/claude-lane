@@ -7,6 +7,12 @@ $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-windows-selftest-
 New-Item -ItemType Directory -Path $TempRoot | Out-Null
 $Passed = 0
 $Failed = 0
+$Architecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
+    $env:PROCESSOR_ARCHITEW6432
+} else {
+    $env:PROCESSOR_ARCHITECTURE
+}
+$IsArm64 = $Architecture.ToUpperInvariant() -eq "ARM64"
 
 function Pass([string]$Name) { $script:Passed++; Write-Output "PASS  $Name" }
 function Fail([string]$Name, [string]$Detail) { $script:Failed++; Write-Output "FAIL  $Name`n      $Detail" }
@@ -41,10 +47,10 @@ try {
     }
     Invoke-Case "有效 Windows 固定清单 dry-run 通过" $Manifest $true "dry-run 通过"
     $BadHash = $Manifest | ConvertTo-Json -Depth 10 | ConvertFrom-Json
-    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { $BadHash.claude_code.win32_arm64.sha256 = "2" * 64 } else { $BadHash.claude_code.win32_x64.sha256 = "2" * 64 }
+    if ($IsArm64) { $BadHash.claude_code.win32_arm64.sha256 = "2" * 64 } else { $BadHash.claude_code.win32_x64.sha256 = "2" * 64 }
     Invoke-Case "Windows 固定摘要漂移停止" $BadHash $false "固定摘要漂移"
     $Pending = $Manifest | ConvertTo-Json -Depth 10 | ConvertFrom-Json
-    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { $Pending.clash_verge.win32_arm64.signature_status = "pending" } else { $Pending.clash_verge.win32_x64.signature_status = "pending" }
+    if ($IsArm64) { $Pending.clash_verge.win32_arm64.signature_status = "pending" } else { $Pending.clash_verge.win32_x64.signature_status = "pending" }
     Invoke-Case "Windows Authenticode 证据缺失停止" $Pending $false "证据尚未完成"
     $Unsafe = $Manifest | ConvertTo-Json -Depth 10 | ConvertFrom-Json
     $Unsafe.claude_lane.windows_path = "../outside.zip"

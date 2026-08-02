@@ -101,13 +101,19 @@ replace_file_metadata clash_verge.win32_x64 "$CLASH_DIR/Clash.Verge_${CLASH_VERS
 
 for platform in win32-arm64 win32-x64; do
   evidence="$MIRROR_WORK_DIR/windows-audit/$platform.json"
-  if [ -f "$evidence" ] && [ "$(/usr/bin/plutil -extract passed raw -o - "$evidence" 2>/dev/null)" = "true" ]; then
+  if [ -f "$evidence" ] &&
+     [ "$(/usr/bin/plutil -extract passed raw -o - "$evidence" 2>/dev/null)" = "true" ] &&
+     [ "$(/usr/bin/plutil -extract platform raw -o - "$evidence" 2>/dev/null)" = "$platform" ] &&
+     [ "$(/usr/bin/plutil -extract bootstrap_selftest.passed raw -o - "$evidence" 2>/dev/null)" = "true" ] &&
+     [ "$(/usr/bin/plutil -extract host.manifest_sha256 raw -o - "$evidence" 2>/dev/null)" = "$(mirror_sha256 "$TEMPLATE")" ]; then
     case "$platform" in
       win32-arm64) suffix=win32_arm64 ;;
       win32-x64) suffix=win32_x64 ;;
     esac
     /usr/bin/plutil -replace "claude_code.$suffix.signature_status" -string verified-authenticode "$TMP_OUTPUT"
     /usr/bin/plutil -replace "clash_verge.$suffix.signature_status" -string verified-authenticode "$TMP_OUTPUT"
+  elif [ -f "$evidence" ]; then
+    mirror_warn "ignoring incomplete or mismatched Windows evidence: $evidence"
   fi
 done
 

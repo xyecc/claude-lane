@@ -28,14 +28,19 @@ bash scripts/mirror/fetch-clash-verge.sh --execute
 bash scripts/mirror/verify-artifacts.sh
 ```
 
-把 `.mirror-work` 安全传到两种真实 Windows 发布机，在各自主机运行：
+先生成只包含固定 Windows 制品和验证脚本的搬运包：
 
-```powershell
-powershell.exe -NoProfile -File scripts\mirror\verify-artifacts.ps1
-powershell.exe -NoProfile -File scripts\bootstrap-windows-selftest.ps1
+```bash
+bash scripts/mirror/build-windows-validation-bundle.sh --execute
 ```
 
-两个审计 JSON 都回收到 `.mirror-work/windows-audit/` 后，才允许生成候选清单。Intel 版 Claude Code 的 `--version` 仍需在原生 Intel Mac 上复验。lane 包只能从干净、已审阅并已提交的工作树构建；归档使用运行时文件白名单，不包含外层启动器、`manifests/stable.json` 或发布者工具，从而避免 manifest 与归档摘要互相引用：
+把 `.mirror-work/validation/claude-lane-windows-validation.zip` 及其 `.sha256` 文件安全传到两种真实 Windows 发布机。核对摘要并解压后，在各自主机运行：
+
+```powershell
+powershell.exe -NoProfile -File scripts\windows-validation.ps1
+```
+
+两个审计 JSON 都回收到发布 Mac 的 `.mirror-work/windows-audit/` 后，才允许生成候选清单。详细步骤见 `docs/validation-playbook.md`。Intel 版 Claude Code 的 `--version` 仍需在原生 Intel Mac 上复验。lane 包只能从干净、已审阅并已提交的工作树构建；归档使用运行时文件白名单，不包含外层启动器、`manifests/stable.json` 或发布者工具，从而避免 manifest 与归档摘要互相引用：
 
 ```bash
 bash scripts/mirror/build-lane.sh --execute

@@ -37,6 +37,16 @@ if /usr/bin/grep -Fq 'manifests/stable.json and publisher tooling also avoids a 
 else
   bad "lane 归档使用运行时白名单并规避清单哈希循环"
 fi
+if /bin/bash -n "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
+   /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" 2>&1 | /usr/bin/grep -Fq 'dry-run: no bundle created' &&
+   /usr/bin/grep -Fq 'scripts/windows-validation.ps1' "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
+   /usr/bin/grep -Fq 'VALIDATION PASSED' "$REPO_ROOT/scripts/windows-validation.ps1" &&
+   /usr/bin/grep -Fq 'bootstrap_selftest.passed' "$SCRIPT_DIR/generate-manifest.sh" &&
+   /usr/bin/grep -Fq 'host.manifest_sha256' "$SCRIPT_DIR/generate-manifest.sh"; then
+  ok "Windows 真机验证包默认 dry-run，审计证据绑定固定清单与自测"
+else
+  bad "Windows 真机验证包默认 dry-run，审计证据绑定固定清单与自测"
+fi
 
 printf '\nmirror selftest: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
