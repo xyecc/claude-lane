@@ -32,13 +32,17 @@ mirror_valid_version "$MIRROR_VERSION" || mirror_die "invalid Claude Code versio
 BASE_URL="https://downloads.claude.ai/claude-code-releases"
 DEST="$MIRROR_WORK_DIR/claude-code/releases/$MIRROR_VERSION"
 EXPECTED_FINGERPRINT="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
-PLATFORMS="darwin-arm64 darwin-x64"
+PLATFORMS="darwin-arm64 darwin-x64 win32-arm64 win32-x64"
 PUBLISHER_ARCH=$(/usr/bin/uname -m)
 
 mirror_say "Claude Code ${MIRROR_VERSION}"
 mirror_say "official manifest: ${BASE_URL}/${MIRROR_VERSION}/manifest.json"
 for platform in $PLATFORMS; do
-  mirror_say "  ${platform}: ${BASE_URL}/${MIRROR_VERSION}/${platform}/claude"
+  case "$platform" in
+    win32-*) binary=claude.exe ;;
+    *) binary=claude ;;
+  esac
+  mirror_say "  ${platform}: ${BASE_URL}/${MIRROR_VERSION}/${platform}/${binary}"
 done
 [ "$MIRROR_EXECUTE" = "1" ] || { mirror_say "dry-run: no files downloaded"; exit 0; }
 
@@ -85,13 +89,15 @@ for platform in $PLATFORMS; do
   case "$platform" in
     darwin-arm64) local_name=claude-darwin-arm64 ;;
     darwin-x64) local_name=claude-darwin-x64 ;;
+    win32-arm64) local_name=claude-win32-arm64.exe ;;
+    win32-x64) local_name=claude-win32-x64.exe ;;
     *) mirror_die "unsupported platform" ;;
   esac
   official_url="$BASE_URL/$MIRROR_VERSION/$platform/$binary"
   target="$DEST/$local_name"
   mirror_download "$official_url" "$target" "$checksum" "Claude ${platform}"
   [ "$(mirror_size "$target")" = "$size" ] || mirror_die "size mismatch for ${platform}"
-  signature_status="verified-codesign-version-pending-native-host"
+  signature_status="pending-windows"
   case "$platform" in
     darwin-*)
       /bin/chmod 755 "$target" || mirror_die "cannot make ${platform} executable"
@@ -113,3 +119,4 @@ for platform in $PLATFORMS; do
 done
 
 mirror_say "verified Claude artifacts: $DEST"
+mirror_say "Windows Authenticode remains pending until verify-artifacts.ps1 runs on Windows."

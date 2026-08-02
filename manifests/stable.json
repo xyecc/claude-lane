@@ -3,11 +3,13 @@
   "release_status": "blocked",
   "release_blockers": [
     "Claude Code darwin-x64 version execution has not run on a native Intel Mac",
+    "Windows x64 and ARM64 Authenticode verification has not run on real Windows hosts",
     "a second domestic storage failure domain is not configured",
     "the private OSS bucket has no controlled stable download gateway",
     "Claude Code public redistribution authorization has not been established for this release"
   ],
   "minimum_macos": "13.0",
+  "minimum_windows": "10.0.17763",
   "required_free_mb": 2048,
   "distribution": {
     "mode": "private-controlled-cache",
@@ -27,8 +29,10 @@
   "claude_lane": {
     "version": "1.3.0",
     "path": "claude-lane/releases/v1.3.0/claude-lane.tar.gz",
+    "windows_path": "claude-lane/releases/v1.3.0/claude-lane.zip",
     "archive_root": "claude-lane-1.3.0",
-    "sha256": "b0cd333dab380f7e9054b843f327cfbc6f265229cbc32866210d9b86e450b241"
+    "sha256": "b0cd333dab380f7e9054b843f327cfbc6f265229cbc32866210d9b86e450b241",
+    "windows_sha256": "TBD"
   },
   "claude_code": {
     "version": "2.1.212",
@@ -70,6 +74,24 @@
       "gatekeeper_status": "not-app-bundle-code-valid",
       "signer": "Anthropic PBC",
       "team_id": "Q6L2SF6YDW"
+    },
+    "win32_arm64": {
+      "os": "windows",
+      "arch": "arm64",
+      "path": "claude-code/releases/2.1.212/claude-win32-arm64.exe",
+      "size": 249684640,
+      "sha256": "adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/win32-arm64/claude.exe",
+      "signature_status": "verified-manifest-sha256-pending-windows-authenticode"
+    },
+    "win32_x64": {
+      "os": "windows",
+      "arch": "x86_64",
+      "path": "claude-code/releases/2.1.212/claude-win32-x64.exe",
+      "size": 255334560,
+      "sha256": "fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/win32-x64/claude.exe",
+      "signature_status": "verified-manifest-sha256-pending-windows-authenticode"
     }
   },
   "clash_verge": {
@@ -102,6 +124,32 @@
       "sha256": "c9fcec27d3e4b4fffe31f314369aaa4017d80c1293c8b1cb65d85de223e9cb6c",
       "official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_x64.dmg",
       "signature_status": "verified-codesign-and-spctl"
+    },
+    "win32_arm64": {
+      "os": "windows",
+      "arch": "arm64",
+      "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe",
+      "size": 41452521,
+      "sha256": "973fafb5f154e541b34c1315f7de7440daf68d05f2e52fa08da2bcc71b6c3214",
+      "official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe",
+      "signature_path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe.sig",
+      "signature_size": 424,
+      "signature_sha256": "fdefd873e0be4b29165c7698e780bfbb8d544fd40c57a52291880f8d7bcfab39",
+      "signature_official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe.sig",
+      "signature_status": "verified-tauri-minisign-pending-windows-authenticode"
+    },
+    "win32_x64": {
+      "os": "windows",
+      "arch": "x86_64",
+      "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe",
+      "size": 46964366,
+      "sha256": "ba42f00b1082e352352080170fe86ae411bcc854cb13f1b8bebc9025e8a7cbf4",
+      "official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe",
+      "signature_path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe.sig",
+      "signature_size": 424,
+      "signature_sha256": "972f7070b0eeaa7e4e9f685b38bed433bb4f2c45b9b93957c46968bacb148ea0",
+      "signature_official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe.sig",
+      "signature_status": "verified-tauri-minisign-pending-windows-authenticode"
     }
   }
 }

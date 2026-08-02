@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-`bootstrap.sh` 是 manifest 驱动的确定性 macOS 启动器框架。当前已固定 Claude Code `2.1.212` 和 Clash Verge Rev `2.5.2` 的 Apple Silicon / Intel 官方摘要；阿里云私有 OSS 主存储可上传。备用国内源、受控下载网关和 lane 归档仍未齐，因此 `manifests/stable.json` 继续处于门禁状态。
+`bootstrap.sh` 与 `bootstrap.ps1` 是 manifest 驱动的确定性启动器框架。当前已固定 Claude Code `2.1.212` 和 Clash Verge Rev `2.5.2` 的 macOS / Windows 双架构官方摘要；阿里云私有 OSS 主存储可上传。备用国内源、受控下载网关、lane 归档和 Windows x64 / ARM64 真机 Authenticode 证据仍未齐，因此 `manifests/stable.json` 继续处于门禁状态。
 
 启动器发现示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或哈希不一致时，必须在修改系统前停止。现在没有公开的 `curl | bash` 地址，也没有已经验收的离线包。不要删除校验、填写随意哈希或临时改用第三方镜像绕过门禁。
 
@@ -22,6 +22,8 @@ macOS bootstrap 负责可确定、可验证的完整启动步骤：
 
 Agent 不决定下载版本或来源，也不临时搜索镜像。启动阶段不依赖 Git、Homebrew、Node.js、Python 3 或 `jq`，只使用 macOS 自带组件。
 
+Windows `bootstrap.ps1` 支持 Windows 10 1809+ 的 x64 / ARM64，只负责固定清单下载、主备切换、SHA-256、Authenticode、版本校验及不覆盖现有安装。它不扩张 macOS 专线 `RUNBOOK.md` 的 Phase -1～6；Windows 分流仍按 `docs/porting.md` 人工处理。启动期间设置 `DISABLE_UPDATES=1` 与 `DISABLE_AUTOUPDATER=1`，不使用执行策略绕过、关闭系统安全或跳过签名。
+
 ## Manifest 语义
 
 根目录 `manifests/stable.json` 是当前 schema 样例。字段如下：
@@ -31,18 +33,22 @@ Agent 不决定下载版本或来源，也不临时搜索镜像。启动阶段�
 | `schema` | 必须为启动器明确支持的整数版本，当前为 `1` |
 | `release_status` | 发布状态；未达到可发布值时停止 |
 | `minimum_macos` | 启动器允许的最低 macOS 版本 |
+| `minimum_windows` | Windows 启动器允许的最低版本，当前为 Windows 10 1809 |
 | `required_free_mb` | 开始下载 / 安装前要求的最小可用磁盘空间（MiB） |
 | `claude_lane.version` | 必须与根目录 `VERSION` 及归档内版本一致 |
 | `claude_lane.path` | 版本化 tarball 的相对对象路径，不能用 `latest` |
 | `claude_lane.archive_root` | 解压后预期的唯一顶层目录，用于拒绝错误包结构 |
 | `claude_lane.sha256` | tarball 的 64 位十六进制 SHA-256 |
+| `claude_lane.windows_path` / `.windows_sha256` | Windows ZIP 的不可变路径与摘要 |
 | `claude_code.version` | 固定 Claude Code 版本，不能用稳定通道别名 |
 | `claude_code.manifest_gpg_fingerprint` | 发布维护者离线审计官方 manifest 时记录的预期 GPG 指纹；bootstrap 运行时只做固定值比对，不执行 GPG 验签 |
 | `claude_code.darwin_arm64.path` / `.sha256` | Apple Silicon 原生二进制路径与启动器内置固定摘要 |
 | `claude_code.darwin_x86_64.path` / `.sha256` | Intel 原生二进制路径与启动器内置固定摘要 |
+| `claude_code.win32_arm64` / `.win32_x64` | Windows 原生 EXE 的路径、摘要及真实 Authenticode 验证状态 |
 | `clash_verge.version` | 固定正式版 Clash Verge Rev 版本 |
 | `clash_verge.arm64.path` / `.sha256` | Apple Silicon DMG 路径与官方核对摘要 |
 | `clash_verge.x86_64.path` / `.sha256` | Intel DMG 路径与官方核对摘要 |
+| `clash_verge.win32_arm64` / `.win32_x64` | Windows 正式安装器、Tauri 签名和 Authenticode 验证状态 |
 
 国内主、备 HTTPS 基址和 **stable manifest 自身的固定 SHA-256** 位于 `bootstrap.sh` 的发布块，不由远端 manifest 自行决定。启动器先从固化的主源、备用源下载 manifest 并核对该摘要，再解析其中的相对 `path`；这样被替换的远端清单不能把下载重定向到新域名。
 
@@ -71,15 +77,18 @@ Agent 不决定下载版本或来源，也不临时搜索镜像。启动阶段�
 5. 运行时再次校验 SHA-256、严格代码签名、固定 bundle identifier 与 Anthropic Team ID；Claude Code 是单文件 Mach-O，不用只适合 App bundle 的 `spctl --type execute`。任一步失败即停止。
 6. Anthropic 官方安装文档明确提到组织可以“通过自己的渠道分发”固定版本，但 Claude Code 的使用仍受对应商业或消费者条款约束；该说明不能自动视为对任意公共镜像的普遍再分发授权。未建立本次公开发布授权前，只使用私有 OSS / 受控缓存，不把二进制附进公开 Release。参考：[安装与更新](https://code.claude.com/docs/en/installation)、[法律与合规](https://code.claude.com/docs/en/legal-and-compliance)。
 
+Windows 二进制还必须分别在真实 x64 与 ARM64 Windows 上运行 `scripts/mirror/verify-artifacts.ps1`，由 `Get-AuthenticodeSignature` 核对有效签名和发布者，并执行 `claude.exe --version`。macOS 不能替代这项证据。
+
 CDN 返回的 `ETag`、`Content-MD5` 或旁路哈希不能替代官方签名 manifest。
 
 ### Clash Verge Rev
 
-1. 只选择官方稳定 Release 的明确版本，同时取得 arm64 / x86_64 DMG；排除 prerelease、nightly 和 AutoBuild 变体。
+1. 只选择官方稳定 Release 的明确版本，同时取得 arm64 / x86_64 DMG 和 Windows ARM64 / x64 正式安装器；排除 prerelease、nightly、AutoBuild 和 fixed-WebView2 变体。
 2. 发布维护者对照官方提供的摘要；若官方没有可信摘要，不得自行把未知下载结果当作官方基线。
 3. 缓存前后执行 SHA-256 对比；安装前运行 `codesign --verify`，安装后对 App 运行 `spctl --assess`。
 4. 不修改 DMG，不使用 `xattr -cr`、关闭 Gatekeeper 或其他方式掩盖签名失败。
 5. 同步 GPL-3.0 许可证并记录对应源码仓库和版本。
+6. Windows 安装器先核对 GitHub Release 摘要与官方 Tauri minisign，再在对应真实 Windows 架构核对 Authenticode；两层任一失败都停止。
 
 ### claude-lane 包
 
@@ -98,8 +107,12 @@ CDN 返回的 `ETag`、`Content-MD5` 或旁路哈希不能替代官方签名 man
 /claude-lane/releases/v1.3.0/claude-lane.tar.gz
 /claude-code/releases/<version>/claude-darwin-arm64
 /claude-code/releases/<version>/claude-darwin-x64
+/claude-code/releases/<version>/claude-win32-arm64.exe
+/claude-code/releases/<version>/claude-win32-x64.exe
 /clash-verge/releases/<version>/Clash.Verge_<version>_aarch64.dmg
 /clash-verge/releases/<version>/Clash.Verge_<version>_x64.dmg
+/clash-verge/releases/<version>/Clash.Verge_<version>_arm64-setup.exe
+/clash-verge/releases/<version>/Clash.Verge_<version>_x64-setup.exe
 /manifests/stable.json
 /licenses/clash-verge-rev-GPL-3.0.txt
 ```
@@ -162,4 +175,5 @@ claude-lane-offline-v1.3.0.zip
 8. 在无代理、无 Git、无 Node.js、无 Homebrew、无 Python 3、无 Claude Code 的干净 Mac 上完成端到端验收；
 9. 验证成功、失败和 Ctrl+C 都不会残留 DeepSeek Key或临时 Claude 配置；
 10. 验证普通 `claude` 不再指向 DeepSeek，再更新 stable 入口和 README 命令。
+11. Windows x64 与 ARM64 分别完成 `scripts/mirror/verify-artifacts.ps1`，并运行 `scripts/bootstrap-windows-selftest.ps1`。
 仓库当前未满足第 1～4、7～10 项中的分发与真机条件，所以保持失败关闭是正确状态，不是安装故障。

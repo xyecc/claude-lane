@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Publisher-side verification for official manifests, hashes,
-# macOS code signatures and Gatekeeper.
+# Publisher-side verification for official manifests, hashes, Tauri signatures,
+# macOS code signatures and Gatekeeper. Windows Authenticode is verified by the
+# sibling PowerShell script on a real Windows host.
 
 set -u
 set -o pipefail
@@ -14,7 +15,7 @@ usage() {
   cat <<'EOF'
 usage: bash scripts/mirror/verify-artifacts.sh [--work-dir DIR]
 
-Dependencies: gpg, macOS codesign/spctl/hdiutil/osascript.
+Dependencies: gpg, minisign, macOS codesign/spctl/hdiutil/osascript.
 EOF
 }
 
@@ -28,6 +29,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 mirror_require gpg
+mirror_require minisign
 mirror_require /usr/bin/codesign
 mirror_require /usr/sbin/spctl
 mirror_require /usr/bin/hdiutil
@@ -55,12 +57,14 @@ fingerprint=$(GNUPGHOME="$GNUPG_HOME" gpg --batch --with-colons --fingerprint se
 GNUPGHOME="$GNUPG_HOME" gpg --batch --verify "$MANIFEST_SIG" "$MANIFEST" >"$CLAUDE_DIR/audit/manifest-gpg-recheck.txt" 2>&1 ||
   mirror_die "Claude manifest signature failed"
 
-for platform in darwin-arm64 darwin-x64; do
+for platform in darwin-arm64 darwin-x64 win32-arm64 win32-x64; do
   checksum=$(/usr/bin/plutil -extract "platforms.${platform}.checksum" raw -o - "$MANIFEST") || mirror_die "manifest missing $platform"
   size=$(/usr/bin/plutil -extract "platforms.${platform}.size" raw -o - "$MANIFEST") || mirror_die "manifest missing size"
   case "$platform" in
     darwin-arm64) file="$CLAUDE_DIR/claude-darwin-arm64" ;;
     darwin-x64) file="$CLAUDE_DIR/claude-darwin-x64" ;;
+    win32-arm64) file="$CLAUDE_DIR/claude-win32-arm64.exe" ;;
+    win32-x64) file="$CLAUDE_DIR/claude-win32-x64.exe" ;;
   esac
   [ -f "$file" ] || mirror_die "missing Claude artifact: $file"
   [ "$(mirror_sha256 "$file")" = "$checksum" ] || mirror_die "Claude hash mismatch: $platform"
@@ -82,6 +86,19 @@ for platform in darwin-arm64 darwin-x64; do
       ;;
   esac
   mirror_say "verified Claude $platform: $checksum"
+done
+
+TAURI_PUBLIC_B64='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyOEMyRjBCQkVGOUJEREYKUldUZnZmbStDeStNMHU5Mmo1N24xQXZwSVRYbXA2NUpzZE5oVzlqeS9Bc0t6RVV4MmtwVjBZaHgK'
+TAURI_PUBLIC="$CLASH_DIR/audit/tauri-minisign.pub"
+printf '%s' "$TAURI_PUBLIC_B64" | /usr/bin/base64 -D >"$TAURI_PUBLIC" || mirror_die "cannot decode Tauri public key"
+for arch in arm64 x64; do
+  installer="$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_${arch}-setup.exe"
+  signature_b64="${installer}.sig"
+  signature="$CLASH_DIR/audit/Clash.Verge_${CLASH_VERSION}_${arch}-setup.exe.minisig"
+  [ -f "$installer" ] && [ -f "$signature_b64" ] || mirror_die "missing Windows Clash installer/signature"
+  /usr/bin/base64 -D -i "$signature_b64" -o "$signature" || mirror_die "cannot decode Tauri signature"
+  minisign -Vm "$installer" -p "$TAURI_PUBLIC" -x "$signature" >/dev/null 2>&1 || mirror_die "Tauri minisign verification failed: $arch"
+  mirror_say "verified Clash Tauri signature: win32-$arch"
 done
 
 MOUNT_POINT=""
@@ -127,3 +144,4 @@ done
 [ -f "$CLASH_DIR/LICENSE" ] && /usr/bin/grep -Fq 'GNU GENERAL PUBLIC LICENSE' "$CLASH_DIR/LICENSE" || mirror_die "Clash GPL license missing"
 [ -f "$CLASH_DIR/SOURCE.txt" ] && /usr/bin/grep -Fq "tree/v$CLASH_VERSION" "$CLASH_DIR/SOURCE.txt" || mirror_die "Clash source metadata missing"
 mirror_say "macOS and upstream signature verification complete"
+mirror_say "pending: run verify-artifacts.ps1 on real Windows x64 and ARM64 hosts"

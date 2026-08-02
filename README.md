@@ -1,6 +1,6 @@
 # Claude 专线：只让 Claude 走美国静态住宅 IP
 
-**v1.3.0** · 仅支持 macOS（Apple Silicon / Intel）· 版本以 [`VERSION`](VERSION) 为准 · [更新日志](CHANGELOG.md)
+**v1.3.0** · 专线路由仅支持 macOS；镜像启动链覆盖 macOS / Windows x64 / ARM64 · 版本以 [`VERSION`](VERSION) 为准 · [更新日志](CHANGELOG.md)
 
 让 macOS 上的 Claude 网页版、桌面版和 Claude Code 固定走一个美国静态住宅 IP；其他流量继续使用机场订阅原有规则。
 
@@ -14,13 +14,13 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 
 ## v1.3.0 当前状态
 
-本版加入 manifest 驱动的确定性 `bootstrap.sh`。固定上游基线为 Claude Code `2.1.212`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel。阿里云私有 OSS 主存储已经过最小权限验证，但备用国内源、受控下载网关和 lane 归档仍未齐，因此 stable **保持阻断**。
+本版加入 manifest 驱动的确定性 `bootstrap.sh` 与 `bootstrap.ps1`。固定上游基线为 Claude Code `2.1.212`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel 与 Windows ARM64 / x64。阿里云私有 OSS 主存储已经过最小权限验证，但备用国内源、私有下载网关、Windows 真机签名证据和 lane 归档仍未齐，因此 stable **保持阻断**。
 
 因此：
 
 - 启动器遇到示例域名、`TBD`、空值或非 64 位 SHA-256 时会在修改系统前安全停止；
 - 目前没有可公开复制的国内 `curl | bash` 安装命令；
-- 正式制品、备用源、离线包和无代理干净 Mac 端到端验收尚未全部完成；
+- 正式制品、备用源、离线包、Windows 双架构真机和无代理干净 Mac 端到端验收尚未全部完成；
 - 不要删掉校验或临时换第三方镜像来绕过门禁。
 
 分发清单、签名、对象存储和发布门禁见 [`docs/bootstrap.md`](docs/bootstrap.md)。当前可先审阅 [`RUNBOOK.md`](RUNBOOK.md)，或在已有 Clash Verge 环境上使用 [`docs/manual-setup.md`](docs/manual-setup.md)。
@@ -30,7 +30,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 | 平台 | 分流方案 | 本仓库自动化 |
 |---|---|---|
 | macOS（Apple Silicon / Intel） | 支持 | 完整 RUNBOOK 目标平台；stable 待发布 |
-| Windows | 原理可移植 | 不在 v1.3.0 自动化范围，见 [`docs/porting.md`](docs/porting.md) |
+| Windows（ARM64 / x64） | 原理可移植 | 固定版镜像下载、SHA-256、Authenticode 与安装链已实现；专线路由仍参考 [`docs/porting.md`](docs/porting.md) |
 | iPhone / iOS | 可用其他客户端实现 | 不支持，见 [`docs/iphone-notes.md`](docs/iphone-notes.md) |
 | Linux | 未验证 | 不支持 |
 
@@ -144,6 +144,7 @@ bash scripts/rollback.sh <deployment-id>
 | `RUNBOOK.md` | Agent 无关的唯一权威执行手册 |
 | `CLAUDE.md` / `AGENTS.md` / `QWEN.md` | 各 Agent 的精简入口 |
 | `bootstrap.sh` | Bash 3.2 确定性启动器；分发资源未配置时安全停止 |
+| `bootstrap.ps1` | Windows 10 1809+ x64 / ARM64 固定版下载、验签与安装启动器 |
 | `manifests/stable.json` | 固定版本、主备源和 SHA-256 清单 |
 | `docs/bootstrap.md` | 国内分发、签名、离线包和发布门禁 |
 | `docs/mirror-release.md` | 发布者侧抓取、验签、上传与 stable 人工晋级手册 |
@@ -154,6 +155,7 @@ bash scripts/rollback.sh <deployment-id>
 | `scripts/verify.sh` | 六项验证与出口基线 |
 | `scripts/selftest.sh` | 配置脚本烟雾测试 |
 | `scripts/bootstrap-selftest.sh` | bootstrap 失败关闭与恢复测试 |
+| `scripts/bootstrap-windows-selftest.ps1` | Windows 清单与签名证据失败关闭测试 |
 | `scripts/mirror/` | macOS 发布机镜像抓取、验证、清单、OSS 上传和人工晋级工具 |
 | `scripts/bootstrap-complete.sh` | Phase 6 非秘密完成标记；仍需父启动器独立六项复验 |
 | `docs/troubleshooting.md` | 常见故障排查 |

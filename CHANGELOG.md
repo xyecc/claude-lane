@@ -10,9 +10,10 @@
 
 **启动链路（框架已落地，分发尚未发布）**
 
-- 镜像矩阵固定为 Claude Code `2.1.212` 与 Clash Verge Rev `2.5.2` 的 macOS Apple Silicon / Intel 制品，并同步 GPL 许可证和官方源码元数据
-- 新增 `scripts/mirror/` 发布工具：默认 dry-run 的官方抓取、GPG / codesign / Gatekeeper 验证、候选清单生成、OSS 不覆盖上传和显式 stable 晋级
-- 新增 `scripts/mirror/selftest.sh`，覆盖清单阻断、不可变路径、固定摘要、OSS 不覆盖和客户端无海外下载源检查
+- 新增 Windows 10 1809+ 的 `bootstrap.ps1`，覆盖 x64 / ARM64 原生 Claude Code 与 Clash Verge Rev 正式安装器；强制固定版本、主备国内源、SHA-256、Authenticode、版本检查和不覆盖现有安装，且不扩张 macOS 专线路由阶段
+- 镜像矩阵固定为 Claude Code `2.1.212` 与 Clash Verge Rev `2.5.2`；新增 Windows 双架构摘要、Tauri `.sig`、GPL 许可证和官方源码元数据。Windows 真机 Authenticode 仍是 stable 阻断项
+- 新增 `scripts/mirror/` 发布工具：默认 dry-run 的官方抓取、GPG / codesign / Gatekeeper / minisign 验证、候选清单生成、OSS 不覆盖上传和显式 stable 晋级
+- 新增 `scripts/bootstrap-windows-selftest.ps1` 与 `scripts/mirror/selftest.sh`；macOS 启动器也会验证 Windows 双架构字段和签名证据，防止发布不完整矩阵
 - 新增 Bash 3.2 兼容的 `bootstrap.sh`、`manifests/stable.json` 和 `scripts/bootstrap-selftest.sh`：manifest 固定版本、相对路径与 SHA-256，启动器发布块固化国内主备源和 manifest 自身摘要；目标机不依赖 Git、Homebrew、Node.js、Python 3 或 `jq`
 - 所有下载字段执行失败关闭：示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或校验失败都会在修改系统前停止，不会降级到未知版本或第三方镜像
 - DeepSeek 安装 Key 从终端隐藏读取，只传给临时 Claude Code 子进程；模型固定为 `deepseek-v4-flash`、推理强度 `max`，并由 `trap` 负责退出清理

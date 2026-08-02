@@ -15,7 +15,7 @@ usage() {
 usage: bash scripts/mirror/fetch-clash-verge.sh [--version X.Y.Z] [--work-dir DIR] [--execute]
 
 Default: print the fixed official release without downloading.
-Only the two macOS DMGs required by RUNBOOK.md are mirrored.
+The normal Windows installers are mirrored; fixed-WebView2 builds are excluded.
 EOF
 }
 
@@ -32,7 +32,7 @@ TAG="v$MIRROR_VERSION"
 REPO="clash-verge-rev/clash-verge-rev"
 RELEASE_API="https://api.github.com/repos/$REPO/releases/tags/$TAG"
 DEST="$MIRROR_WORK_DIR/clash-verge/releases/$TAG"
-ASSETS="Clash.Verge_${MIRROR_VERSION}_aarch64.dmg Clash.Verge_${MIRROR_VERSION}_x64.dmg"
+ASSETS="Clash.Verge_${MIRROR_VERSION}_aarch64.dmg Clash.Verge_${MIRROR_VERSION}_x64.dmg Clash.Verge_${MIRROR_VERSION}_arm64-setup.exe Clash.Verge_${MIRROR_VERSION}_arm64-setup.exe.sig Clash.Verge_${MIRROR_VERSION}_x64-setup.exe Clash.Verge_${MIRROR_VERSION}_x64-setup.exe.sig"
 
 mirror_say "Clash Verge Rev ${TAG}"
 mirror_say "official release: https://github.com/$REPO/releases/tag/$TAG"
@@ -75,6 +75,9 @@ for asset in $ASSETS; do
   [ "$(mirror_size "$DEST/$asset_name")" = "$asset_size" ] || mirror_die "size mismatch for $asset_name"
   case "$asset_name" in
     *.dmg) platform=darwin; signature_status=pending-codesign ;;
+    *_arm64-setup.exe) platform=win32-arm64; signature_status=pending-authenticode ;;
+    *_x64-setup.exe) platform=win32-x64; signature_status=pending-authenticode ;;
+    *.sig) platform=signature; signature_status=official-tauri-signature ;;
     *) mirror_die "unexpected Clash asset" ;;
   esac
   printf 'clash-verge-rev\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
@@ -85,4 +88,4 @@ LICENSE_URL="https://raw.githubusercontent.com/$REPO/$TAG/LICENSE"
 mirror_download "$LICENSE_URL" "$DEST/LICENSE" "" "Clash GPL license"
 printf '%s\n' "source=https://github.com/$REPO/tree/$TAG" "license=$LICENSE_URL" >"$DEST/SOURCE.txt"
 mirror_say "downloaded digest-verified Clash artifacts: $DEST"
-mirror_say "macOS codesign/spctl remain for verify-artifacts.sh."
+mirror_say "macOS codesign/spctl and Windows Authenticode remain for verify-artifacts scripts."

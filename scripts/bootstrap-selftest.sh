@@ -101,6 +101,16 @@ cat >"$VALID_MANIFEST" <<'JSON'
     "darwin_x86_64": {
       "path": "claude-code/releases/2.1.212/claude-darwin-x64",
       "sha256": "7681a0634c89fa4474e53c0c794e992944aebf3409a7a2b87ea9f9b0194ea341"
+    },
+    "win32_arm64": {
+      "path": "claude-code/releases/2.1.212/claude-win32-arm64.exe",
+      "sha256": "adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5",
+      "signature_status": "verified-authenticode"
+    },
+    "win32_x64": {
+      "path": "claude-code/releases/2.1.212/claude-win32-x64.exe",
+      "sha256": "fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa",
+      "signature_status": "verified-authenticode"
     }
   },
   "clash_verge": {
@@ -112,6 +122,16 @@ cat >"$VALID_MANIFEST" <<'JSON'
     "x86_64": {
       "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64.dmg",
       "sha256": "c9fcec27d3e4b4fffe31f314369aaa4017d80c1293c8b1cb65d85de223e9cb6c"
+    },
+    "win32_arm64": {
+      "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe",
+      "sha256": "973fafb5f154e541b34c1315f7de7440daf68d05f2e52fa08da2bcc71b6c3214",
+      "signature_status": "verified-authenticode"
+    },
+    "win32_x64": {
+      "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe",
+      "sha256": "ba42f00b1082e352352080170fe86ae411bcc854cb13f1b8bebc9025e8a7cbf4",
+      "signature_status": "verified-authenticode"
     }
   }
 }
@@ -211,6 +231,14 @@ expect_failure "Claude Code 固定摘要漂移停止" "arm64 摘要不匹配" te
 clash_hash_manifest="$TMP_ROOT/clash-hash.json"
 copy_and_replace "$clash_hash_manifest" clash_verge.x86_64.sha256 string 1111111111111111111111111111111111111111111111111111111111111111
 expect_failure "未选架构的 Clash 摘要漂移也停止" "x86_64 摘要不匹配" test_bootstrap "$clash_hash_manifest"
+
+windows_hash_manifest="$TMP_ROOT/windows-hash.json"
+copy_and_replace "$windows_hash_manifest" claude_code.win32_x64.sha256 string 1111111111111111111111111111111111111111111111111111111111111111
+expect_failure "Windows 固定摘要漂移也阻止完整矩阵发布" "Windows x64 摘要不匹配" test_bootstrap "$windows_hash_manifest"
+
+windows_signature_manifest="$TMP_ROOT/windows-signature.json"
+copy_and_replace "$windows_signature_manifest" clash_verge.win32_arm64.signature_status string pending-windows-arm64
+expect_failure "Windows 真机签名证据缺失阻止完整矩阵发布" "Windows arm64 尚未通过真实 Windows 签名验证" test_bootstrap "$windows_signature_manifest"
 
 fingerprint_manifest="$TMP_ROOT/fingerprint.json"
 copy_and_replace "$fingerprint_manifest" claude_code.manifest_gpg_fingerprint string 0000000000000000000000000000000000000000

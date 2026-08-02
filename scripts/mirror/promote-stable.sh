@@ -34,6 +34,9 @@ for key in distribution.primary.base_url distribution.backup.base_url; do
   value=$(/usr/bin/plutil -extract "$key" raw -o - "$CANDIDATE" 2>/dev/null || true)
   case "$value" in https://*) ;; *) mirror_die "$key is not a released HTTPS gateway" ;; esac
 done
+for key in claude_code.win32_arm64.signature_status claude_code.win32_x64.signature_status clash_verge.win32_arm64.signature_status clash_verge.win32_x64.signature_status; do
+  [ "$(/usr/bin/plutil -extract "$key" raw -o - "$CANDIDATE" 2>/dev/null)" = verified-authenticode ] || mirror_die "$key is not verified"
+done
 [ -z "$(/usr/bin/git -C "$MIRROR_REPO_ROOT" status --porcelain 2>/dev/null)" ] || mirror_die "repository must be clean before stable promotion"
 
 if [ "$MIRROR_EXECUTE" != 1 ]; then

@@ -158,10 +158,12 @@ for pair in \
   "manifest.json|claude-code/releases/$CLAUDE_VERSION/manifest.json" \
   "manifest.json.sig|claude-code/releases/$CLAUDE_VERSION/manifest.json.sig" \
   "claude-darwin-arm64|claude-code/releases/$CLAUDE_VERSION/claude-darwin-arm64" \
-  "claude-darwin-x64|claude-code/releases/$CLAUDE_VERSION/claude-darwin-x64"; do
+  "claude-darwin-x64|claude-code/releases/$CLAUDE_VERSION/claude-darwin-x64" \
+  "claude-win32-arm64.exe|claude-code/releases/$CLAUDE_VERSION/claude-win32-arm64.exe" \
+  "claude-win32-x64.exe|claude-code/releases/$CLAUDE_VERSION/claude-win32-x64.exe"; do
   upload_one "$CLAUDE_DIR/${pair%%|*}" "${pair#*|}"
 done
-for name in "Clash.Verge_${CLASH_VERSION}_aarch64.dmg" "Clash.Verge_${CLASH_VERSION}_x64.dmg" LICENSE SOURCE.txt; do
+for name in "Clash.Verge_${CLASH_VERSION}_aarch64.dmg" "Clash.Verge_${CLASH_VERSION}_x64.dmg" "Clash.Verge_${CLASH_VERSION}_arm64-setup.exe" "Clash.Verge_${CLASH_VERSION}_arm64-setup.exe.sig" "Clash.Verge_${CLASH_VERSION}_x64-setup.exe" "Clash.Verge_${CLASH_VERSION}_x64-setup.exe.sig" LICENSE SOURCE.txt; do
   upload_one "$CLASH_DIR/$name" "clash-verge/releases/v$CLASH_VERSION/$name"
 done
 fi
@@ -169,5 +171,6 @@ if [ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = lane ]; then
   LANE_VERSION=$(/usr/bin/plutil -extract claude_lane.version raw -o - "$MANIFEST")
   LANE_DIR="$MIRROR_WORK_DIR/claude-lane/releases/v$LANE_VERSION"
   upload_one "$LANE_DIR/claude-lane.tar.gz" "claude-lane/releases/v$LANE_VERSION/claude-lane.tar.gz"
+  upload_one "$LANE_DIR/claude-lane.zip" "claude-lane/releases/v$LANE_VERSION/claude-lane.zip"
 fi
 mirror_say "artifact upload complete; stable manifest was not uploaded"
