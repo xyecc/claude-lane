@@ -2,7 +2,6 @@
   "schema": 1,
   "release_status": "blocked",
   "release_blockers": [
-    "claude-lane archives have not been built from a clean reviewed commit",
     "Claude Code darwin-x64 version execution has not run on a native Intel Mac",
     "a second domestic storage failure domain is not configured",
     "the private OSS bucket has no controlled stable download gateway",
@@ -29,7 +28,7 @@
     "version": "1.3.0",
     "path": "claude-lane/releases/v1.3.0/claude-lane.tar.gz",
     "archive_root": "claude-lane-1.3.0",
-    "sha256": "TBD"
+    "sha256": "4bcdb33f17bc85eb13e335a40b3017a0fd10b526c858dac8be69f5963eb469e1"
   },
   "claude_code": {
     "version": "2.1.212",

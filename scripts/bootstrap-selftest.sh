@@ -450,7 +450,7 @@ fi
 
 if /usr/bin/plutil -convert xml1 -o /dev/null -- "$REPO_DIR/manifests/stable.json" >/dev/null 2>&1 && \
    /usr/bin/grep -Fq '"release_status": "blocked"' "$REPO_DIR/manifests/stable.json" && \
-   /usr/bin/grep -Fq '"sha256": "TBD"' "$REPO_DIR/manifests/stable.json"; then
+   /usr/bin/grep -Fq '"base_url": "TBD"' "$REPO_DIR/manifests/stable.json"; then
   pass "仓库 stable manifest 保持发布门禁"
 else
   fail "仓库 stable manifest 保持发布门禁"
