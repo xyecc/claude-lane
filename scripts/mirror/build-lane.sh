@@ -34,12 +34,11 @@ head_version=$(git show HEAD:VERSION 2>/dev/null | /usr/bin/tr -d '\r\n ') || mi
 [ "$head_version" = "$MIRROR_VERSION" ] || mirror_die "HEAD VERSION does not match requested release"
 /bin/mkdir -p "$DEST" || mirror_die "cannot create lane artifact directory"
 [ ! -e "$DEST/claude-lane.tar.gz" ] || mirror_die "lane archive already exists; immutable output will not be overwritten"
-SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD) || mirror_die "cannot read commit time"
-export SOURCE_DATE_EPOCH
 # Only runtime files enter the target machine. Excluding bootstrap.sh,
 # manifests/stable.json and publisher tooling also avoids a circular digest:
 # the outer bootstrap pins the manifest, while the manifest pins this archive.
-git archive --format=tar --prefix="claude-lane-$MIRROR_VERSION/" HEAD -- \
+git archive --format=tar --mtime='1970-01-01T00:00:00Z' \
+  --prefix="claude-lane-$MIRROR_VERSION/" HEAD -- \
   VERSION LICENSE README.md RUNBOOK.md CLAUDE.md AGENTS.md QWEN.md \
   docs/account-safety.md docs/iphone-notes.md docs/manual-setup.md \
   docs/porting.md docs/troubleshooting.md \
