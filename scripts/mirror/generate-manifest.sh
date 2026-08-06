@@ -9,7 +9,7 @@ umask 077
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/common.sh"
 
-OUTPUT="$MIRROR_WORK_DIR/manifests/stable.candidate.json"
+OUTPUT=""
 TEMPLATE="$MIRROR_REPO_ROOT/manifests/stable.json"
 
 usage() {
@@ -26,6 +26,12 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+# `--work-dir` 可能改变候选根目录，因此默认输出必须在参数解析完成后计算。
+# 显式 `--output` 仍保持调用方指定的位置。
+if [ -z "$OUTPUT" ]; then
+  OUTPUT="$MIRROR_WORK_DIR/manifests/stable.candidate.json"
+fi
 
 mirror_require plutil
 mirror_require osascript
