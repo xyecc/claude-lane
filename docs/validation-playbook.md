@@ -7,7 +7,7 @@
 - 不把 DeepSeek Key、机场订阅、静态 IP 四元组、完整 Clash 配置或真实出口 IP 写进结果文件、聊天或 Git。
 - macOS 严格按根目录 `RUNBOOK.md` 的 Phase -1～6 执行；命中 STOP 就停止并按 deployment id 回滚。
 - Windows 不使用执行策略绕过、不关闭系统安全。Claude Code 必须通过 Authenticode；Clash Verge Rev 必须通过固定 SHA-256、上游 Tauri minisign 与原生版本检查，并记录其 Authenticode 实际状态。
-- RC 真机证据写在 `%LOCALAPPDATA%\claude-lane\audit\<platform>.json`（schema 2，当前用户 ACL）；只回传这一个文件。原始配置、日志和出口基线不是可回收证据。
+- RC 真机证据写在平台各自的 `audit/<platform>.json`（schema 2；Windows 在 `%LOCALAPPDATA%\claude-lane\audit\`，macOS 在 `$HOME/Library/Application Support/claude-lane/audit/`）；只回传这一个文件。原始配置、日志和出口基线不是可回收证据。
 
 ## Apple Silicon Mac
 
@@ -40,6 +40,21 @@ bash /tmp/claude-lane-rc.sh
 ```
 
 先把显示的摘要与发布者提供的 `evidence.txt` 对照；不一致立即停止。
+
+Phase 5 六项验证全绿后，在 RC 安装环境运行 macOS 审计证据入口（无 Git、无仓库、无 `.mirror-work`）：
+
+```bash
+bash "$HOME/Library/Application Support/claude-lane/releases/v1.3.0/scripts/macos-evidence.sh"
+```
+
+成功时输出 `VALIDATION PASSED: darwin-arm64` 或 `darwin-x64`，并写入：
+
+```text
+$HOME/Library/Application Support/claude-lane/audit/darwin-arm64.json
+$HOME/Library/Application Support/claude-lane/audit/darwin-x64.json
+```
+
+**用户只把对应架构的单个 `audit/<platform>.json` 文件回传给发布 Mac**（不要回传配置、日志或 `claude-lane-state.json`）。`clean-mac.json` 由验收人在发布 Mac 上加工：复制干净 Mac 回传的 darwin 证据，把 `platform` 改写为 `clean-mac`，并注入 `clean_host: true` 与 `deepseek_cleanup` 的 `success`/`failure`/`interrupt` 三个布尔（三场景残留检查全部通过才可为 true）；released 门禁按这三项与 `platform=clean-mac` 校验。
 
 ## Windows x64 / ARM64
 
@@ -114,11 +129,11 @@ Windows 真机还必须验证：四元组不回显、受保护备份可恢复、
 
 | 项目 | 通过证据 |
 |---|---|
-| Apple Silicon Mac | RUNBOOK 六项全绿、DeepSeek 清理、正常 Claude 登录 |
-| Intel Mac | 原生 `claude-darwin-x64 --version` 与完整规定测试 |
+| Apple Silicon Mac | `$HOME/Library/Application Support/claude-lane/audit/darwin-arm64.json`（schema 2：codesign、六项验证） |
+| Intel Mac | `$HOME/Library/Application Support/claude-lane/audit/darwin-x64.json`（schema 2：同上，host.arch=x86_64） |
 | Windows x64 | `%LOCALAPPDATA%\claude-lane\audit\win32-x64.json`（schema 2：Authenticode、运行期自测、路由六项） |
 | Windows ARM64 | `%LOCALAPPDATA%\claude-lane\audit\win32-arm64.json`（schema 2：同上） |
-| 干净 Mac Bootstrap | 无预装依赖端到端成功，成功/失败/中断均无临时凭证残留 |
+| 干净 Mac Bootstrap | `clean-mac.json`（`clean_host=true` + deepseek_cleanup 三场景全 true） |
 | 国内分发 | 阿里云 OSS 主源公开对象上传、匿名回下载、同一 SHA-256 |
 
 全部完成后才能清空 blocker、把 candidate 改为 `released`、晋级 stable、合并 `main` 并打 v1.3.0 标签。

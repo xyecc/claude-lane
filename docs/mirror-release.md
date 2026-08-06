@@ -77,13 +77,32 @@ bash scripts/mirror/upload.sh --execute --profile primary --scope lane
 
 本轮只启用阿里云 OSS 主源。备用 OSS 使用 `CLAUDE_LANE_BACKUP_OSS_*` 和 `--profile backup`，维护者明确暂缓；启动器允许备用地址为空，但清单必须记录 `backup.enabled=false`。
 
-## stable 人工晋级
+## released 清单生成（证据门禁）
 
-默认运行 `generate-manifest.sh` 只生成 `blocked` 清单；带 `--status candidate` 的 RC 清单也不能晋级。完成主源回下载、两种 Windows 真机、两种 Mac 真机和无代理端到端验收后，由维护者基于最终证据生成 `released` 清单、审阅并清空全部 blocker，再显式运行：
+默认运行 `generate-manifest.sh` 只生成 `blocked` 清单；带 `--status candidate` 的 RC 清单也不能晋级。五机验收把非秘密证据 JSON 回传到发布 Mac 的同一目录后，用证据门禁生成 `released` 清单（缺任一文件、schema/platform/candidate_id/验证状态不匹配则立即失败关闭）：
 
 ```bash
-bash scripts/mirror/promote-stable.sh --candidate .mirror-work/manifests/stable.candidate.json
-bash scripts/mirror/promote-stable.sh --execute --candidate .mirror-work/manifests/stable.candidate.json --profile primary
+candidate_id=<RC2十六进制id>
+evidence_dir=.mirror-work/release-evidence/$candidate_id
+# 目录内必须同时有：
+#   win32-x64.json win32-arm64.json darwin-arm64.json darwin-x64.json clean-mac.json
+
+bash scripts/mirror/generate-manifest.sh --execute \
+  --status released \
+  --candidate-id "$candidate_id" \
+  --evidence-dir "$evidence_dir" \
+  --output .mirror-work/manifests/stable.released.json
+```
+
+通过后门禁会：把 `release_status` 置为 `released`、清空 `release_blockers`、把 `claude_lane.path/windows_path` 改回正式 `releases/v<版本>/…` 路径、保留 `candidate_id` 供追溯，并写入 `release_evidence`（五份证据各自 sha256 + platform，不含证据正文）。摘要仍从本地 `.mirror-work` 制品重算。
+
+## stable 人工晋级
+
+完成主源回下载、两种 Windows 真机、两种 Mac 真机和无代理端到端验收，并已生成 `released` 清单后，由维护者审阅再显式运行：
+
+```bash
+bash scripts/mirror/promote-stable.sh --candidate .mirror-work/manifests/stable.released.json
+bash scripts/mirror/promote-stable.sh --execute --candidate .mirror-work/manifests/stable.released.json --profile primary
 ```
 
 晋级脚本要求清单已是 `released`、blocker 为空、主源为 HTTPS、签名状态合格且 Git 工作树干净。当前仓库不满足这些条件，拒绝晋级是预期结果。

@@ -447,6 +447,56 @@ RUNTIME_PY=$(grep -nE '(^|[[:space:]])python3([[:space:]]|$)' \
   "$HERE/set-credentials.sh" "$HERE/profile-config.sh" "$HERE/verify.sh" 2>/dev/null || true)
 [ -z "$RUNTIME_PY" ] && ok "运行期脚本不再调用 python3" || ng "仍有 Python 运行期调用：${RUNTIME_PY}"
 
+echo "[13] macos-evidence.sh：语法与关键静态门禁（秘密扫描 / 失败关闭 / 不读基线内容）"
+if [ -f "$HERE/macos-evidence.sh" ] && /bin/bash -n "$HERE/macos-evidence.sh"; then
+  ok "macos-evidence.sh 存在且 bash -n 通过"
+else
+  ng "macos-evidence.sh 缺失或语法错误"
+fi
+if /usr/bin/grep -Fq 'assert-no-secrets' "$HERE/macos-evidence.sh" &&
+   /usr/bin/grep -Fq 'assert-no-secrets' "$HERE/macos-json.js" &&
+   /usr/bin/grep -Fq 'sk-[A-Za-z0-9_-]{8,}' "$HERE/macos-json.js"; then
+  ok "macos-evidence 含秘密扫描门禁（Key/IP 模式）"
+else
+  ng "macos-evidence 缺少秘密扫描门禁"
+fi
+if /usr/bin/grep -Fq '六项验证尚未通过' "$HERE/macos-evidence.sh" &&
+   /usr/bin/grep -Fq 'VALIDATION_PASSED' "$HERE/macos-evidence.sh" &&
+   /usr/bin/grep -Fq '拒绝落盘' "$HERE/macos-evidence.sh"; then
+  ok "macos-evidence 验证失败与秘密命中均为失败关闭"
+else
+  ng "macos-evidence 缺少失败关闭断言"
+fi
+# Baseline existence only: must not call json-get / plutil -extract / cat on the baseline path.
+if /usr/bin/grep -Fq 'BASELINE_PATH' "$HERE/macos-evidence.sh" &&
+   /usr/bin/grep -Eq '\[ -f "\$BASELINE_PATH" \]' "$HERE/macos-evidence.sh" &&
+   ! /usr/bin/grep -E 'json-get.*BASELINE|plutil.*BASELINE_PATH|/bin/cat "\$BASELINE_PATH"' "$HERE/macos-evidence.sh" >/dev/null; then
+  ok "macos-evidence 只检查基线存在性、不读内容"
+else
+  ng "macos-evidence 可能读取基线内容或未做存在性检查"
+fi
+if /usr/bin/grep -Fq -- '--probe-secret-file' "$HERE/macos-evidence.sh"; then
+  ok "macos-evidence 支持 --probe-secret-file 自测钩子"
+else
+  ng "macos-evidence 缺少 --probe-secret-file 钩子"
+fi
+
+# Probe: forged evidence containing a reserved-looking key must not be written.
+PROBE_ROOT="$SANDBOX/macos-evidence-probe"
+export CLAUDE_LANE_SETUP_ROOT="$PROBE_ROOT"
+/bin/mkdir -p "$PROBE_ROOT"
+printf '%s\n' '{"schema":2,"note":"sk-probeKEY12345678 must not land"}' >"$PROBE_ROOT/forged.json"
+PROBE_OUT=$(/bin/bash "$HERE/macos-evidence.sh" --probe-secret-file "$PROBE_ROOT/forged.json" 2>&1) || PROBE_RC=$?
+PROBE_RC=${PROBE_RC:-0}
+if [ "$PROBE_RC" != "0" ] &&
+   printf '%s' "$PROBE_OUT" | /usr/bin/grep -Eq 'API Key|拒绝落盘|秘密' &&
+   [ ! -f "$PROBE_ROOT/audit/darwin-arm64.json" ] &&
+   [ ! -f "$PROBE_ROOT/audit/darwin-x64.json" ]; then
+  ok "macos-evidence 命中 Key 模式时拒绝落盘"
+else
+  ng "macos-evidence Key 探针未失败关闭（rc=${PROBE_RC}）"
+fi
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   printf '\033[32m== 全部 %s 项通过 ==\033[0m\n' "$PASS"

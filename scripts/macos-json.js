@@ -661,6 +661,31 @@ function assertJSONScalars(path, keys) {
   return "OK";
 }
 
+// Failure-closed secret scan for audit evidence JSON (mirrors windows-evidence.ps1).
+// Matches sk- keys, IPv4, and IPv6; any hit refuses persistence.
+// Uses existing validIpv4/validIpv6 helpers so JXA need not support lookbehind.
+function assertNoSecrets() {
+  var text = readStdin();
+  if (/sk-[A-Za-z0-9_-]{8,}/.test(text)) {
+    throw new Error("证据内容匹配 API Key 模式；拒绝落盘");
+  }
+  var ipv4Matches = text.match(/[0-9]+(?:\.[0-9]+){3}/g) || [];
+  var i;
+  for (i = 0; i < ipv4Matches.length; i += 1) {
+    if (validIpv4(ipv4Matches[i])) {
+      throw new Error("证据内容匹配 IPv4 模式；拒绝落盘");
+    }
+  }
+  // Tokenize on non-address characters and validate IPv6-shaped pieces.
+  var tokens = text.split(/[^0-9A-Fa-f:.]/);
+  for (i = 0; i < tokens.length; i += 1) {
+    if (tokens[i] && tokens[i].indexOf(":") !== -1 && validIpv6(tokens[i])) {
+      throw new Error("证据内容匹配 IPv6 模式；拒绝落盘");
+    }
+  }
+  return "OK";
+}
+
 function run(argv) {
   if (!argv.length) throw new Error("缺少子命令");
   var command = argv.shift();
@@ -682,6 +707,7 @@ function run(argv) {
     case "valid-ip": return validIpValue();
     case "verify-config": return verifyGeneratedConfig(argv[0]);
     case "assert-json-scalars": return assertJSONScalars(argv.shift(), argv);
+    case "assert-no-secrets": return assertNoSecrets();
     default: throw new Error("未知子命令：" + command);
   }
 }

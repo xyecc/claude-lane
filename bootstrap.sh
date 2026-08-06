@@ -366,6 +366,20 @@ load_manifest() {
   download_checked "$STABLE_MANIFEST_PATH" "$STABLE_MANIFEST_SHA256" "$MANIFEST_FILE" "${RELEASE_CHANNEL} manifest"
 }
 
+# Persist already-validated manifest bytes for RC audit evidence (non-secret).
+# Symmetric with bootstrap.ps1 writing %LOCALAPPDATA%\claude-lane\state\candidate-manifest.json.
+persist_candidate_manifest() {
+  [ -n "$MANIFEST_FILE" ] && [ -f "$MANIFEST_FILE" ] || die "无可持久化的已校验 manifest"
+  state_dir="$HOME/Library/Application Support/claude-lane/state"
+  /bin/mkdir -p "$state_dir" || die "无法创建 candidate-manifest 状态目录"
+  /bin/chmod 700 "$state_dir" 2>/dev/null || true
+  dest="$state_dir/candidate-manifest.json"
+  tmp="$state_dir/.candidate-manifest.$$"
+  /bin/cp "$MANIFEST_FILE" "$tmp" || die "无法暂存已校验 manifest"
+  /bin/chmod 600 "$tmp" || die "无法设置 candidate-manifest 权限"
+  /bin/mv -f -- "$tmp" "$dest" || die "无法持久化已校验 manifest"
+}
+
 validate_manifest() {
   # Some macOS plutil builds parse JSON for -extract/-convert but make -lint
   # plist-only. Conversion to an unused plist validates the JSON consistently.
@@ -1158,6 +1172,7 @@ main() {
   require_install_tools
   require_tty
   make_temp_dir
+  persist_candidate_manifest
 
   resume_installed_checkpoint
   resume_status=$?

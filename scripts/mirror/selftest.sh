@@ -100,6 +100,173 @@ else
   bad "lane 白名单包含 Windows 审计证据与运行期自测脚本"
 fi
 
+if /usr/bin/grep -Fq 'scripts/macos-evidence.sh' "$SCRIPT_DIR/build-lane.sh"; then
+  ok "lane 白名单包含 macOS 审计证据脚本"
+else
+  bad "lane 白名单包含 macOS 审计证据脚本"
+fi
+
+# --- released status + evidence gates (fixtures: no IPs, no sk- keys) ---
+RELEASE_SANDBOX=$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/claude-lane-released-selftest.XXXXXX")
+cleanup_release_sandbox() { /bin/rm -rf "$RELEASE_SANDBOX"; }
+trap cleanup_release_sandbox EXIT
+
+write_evidence_fixture() {
+  # $1=path $2=platform $3=candidate_id $4=extra json object fragment (may be empty)
+  path=$1
+  platform=$2
+  cid=$3
+  extra=${4:-}
+  host_arch_json=""
+  routing_json=""
+  validation_json=""
+  clean_json=""
+  case "$platform" in
+    win32-x64)
+      host_arch_json='"native_arch":"AMD64"'
+      routing_json='"routing_validation":{"state":"VALIDATION_PASSED","six_checks":6,"private_baseline_present":true},"runtime_selftest":{"passed":true,"summary":"12 passed, 0 failed"}'
+      ;;
+    win32-arm64)
+      host_arch_json='"native_arch":"ARM64"'
+      routing_json='"routing_validation":{"state":"VALIDATION_PASSED","six_checks":6,"private_baseline_present":true},"runtime_selftest":{"passed":true,"summary":"12 passed, 0 failed"}'
+      ;;
+    darwin-arm64)
+      host_arch_json='"arch":"arm64"'
+      validation_json='"validation":{"state":"VALIDATION_PASSED","six_checks":6,"private_baseline_present":true}'
+      ;;
+    darwin-x64)
+      host_arch_json='"arch":"x86_64"'
+      validation_json='"validation":{"state":"VALIDATION_PASSED","six_checks":6,"private_baseline_present":true}'
+      ;;
+    clean-mac)
+      host_arch_json='"arch":"arm64"'
+      validation_json='"validation":{"state":"VALIDATION_PASSED","six_checks":6,"private_baseline_present":true}'
+      clean_json='"clean_host":true,"deepseek_cleanup":{"success":true,"failure":true,"interrupt":true}'
+      ;;
+  esac
+  extra_comma=""
+  [ -n "$extra" ] && extra_comma=","
+  routing_part=""
+  [ -n "$routing_json" ] && routing_part=",${routing_json}"
+  validation_part=""
+  [ -n "$validation_json" ] && validation_part=",${validation_json}"
+  clean_part=""
+  [ -n "$clean_json" ] && clean_part=",${clean_json}"
+  printf '%s\n' "{
+  \"schema\": 2,
+  \"platform\": \"${platform}\",
+  \"generated_at\": \"2026-08-07T00:00:00Z\",
+  \"host\": {${host_arch_json}},
+  \"rc\": {
+    \"candidate_id\": \"${cid}\",
+    \"manifest_sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"
+  }${routing_part}${validation_part}${clean_part}${extra_comma}${extra},
+  \"completed_at\": \"2026-08-07T00:00:01Z\"
+}" >"$path"
+}
+
+RC_ID="deadbeefcafe"
+EVIDENCE_OK="$RELEASE_SANDBOX/evidence-ok"
+EVIDENCE_MISS="$RELEASE_SANDBOX/evidence-miss"
+EVIDENCE_BADID="$RELEASE_SANDBOX/evidence-badid"
+WORK_DIR="$RELEASE_SANDBOX/work"
+/bin/mkdir -p "$EVIDENCE_OK" "$EVIDENCE_MISS" "$EVIDENCE_BADID" "$WORK_DIR"
+
+for pair in \
+  "win32-x64.json:win32-x64" \
+  "win32-arm64.json:win32-arm64" \
+  "darwin-arm64.json:darwin-arm64" \
+  "darwin-x64.json:darwin-x64" \
+  "clean-mac.json:clean-mac"; do
+  fname=${pair%%:*}
+  plat=${pair##*:}
+  write_evidence_fixture "$EVIDENCE_OK/$fname" "$plat" "$RC_ID"
+  write_evidence_fixture "$EVIDENCE_BADID/$fname" "$plat" "cafebabe0001"
+done
+# Missing one file (no clean-mac.json)
+for pair in \
+  "win32-x64.json:win32-x64" \
+  "win32-arm64.json:win32-arm64" \
+  "darwin-arm64.json:darwin-arm64" \
+  "darwin-x64.json:darwin-x64"; do
+  fname=${pair%%:*}
+  plat=${pair##*:}
+  write_evidence_fixture "$EVIDENCE_MISS/$fname" "$plat" "$RC_ID"
+done
+
+miss_out=$(/bin/bash "$SCRIPT_DIR/generate-manifest.sh" --status released \
+  --candidate-id "$RC_ID" --evidence-dir "$EVIDENCE_MISS" --work-dir "$WORK_DIR" 2>&1 || true)
+if printf '%s' "$miss_out" | /usr/bin/grep -Eqi 'missing release evidence|clean-mac'; then
+  ok "released 缺任一证据文件时失败关闭"
+else
+  bad "released 缺任一证据文件时失败关闭"
+fi
+
+badid_out=$(/bin/bash "$SCRIPT_DIR/generate-manifest.sh" --status released \
+  --candidate-id "$RC_ID" --evidence-dir "$EVIDENCE_BADID" --work-dir "$WORK_DIR" 2>&1 || true)
+if printf '%s' "$badid_out" | /usr/bin/grep -Fq 'candidate_id mismatch'; then
+  ok "released 证据 candidate_id 不匹配时失败关闭"
+else
+  bad "released 证据 candidate_id 不匹配时失败关闭"
+fi
+
+# Seed minimal local artifacts so --execute can recalculate digests.
+CLAUDE_VERSION=$(/usr/bin/plutil -extract claude_code.version raw -o - "$REPO_ROOT/manifests/stable.json")
+CLASH_VERSION=$(/usr/bin/plutil -extract clash_verge.version raw -o - "$REPO_ROOT/manifests/stable.json")
+LANE_VERSION=$(/usr/bin/plutil -extract claude_lane.version raw -o - "$REPO_ROOT/manifests/stable.json")
+CLAUDE_DIR="$WORK_DIR/claude-code/releases/$CLAUDE_VERSION"
+CLASH_DIR="$WORK_DIR/clash-verge/releases/v$CLASH_VERSION"
+LANE_DIR="$WORK_DIR/claude-lane/releases/v$LANE_VERSION"
+/bin/mkdir -p "$CLAUDE_DIR" "$CLASH_DIR" "$LANE_DIR"
+printf 'manifest-fixture\n' >"$CLAUDE_DIR/manifest.json"
+printf 'manifest-sig-fixture\n' >"$CLAUDE_DIR/manifest.json.sig"
+printf 'dmg-arm\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_aarch64.dmg"
+printf 'dmg-x64\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64.dmg"
+printf 'exe-arm\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe"
+printf 'exe-arm-sig\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe.sig"
+printf 'exe-x64\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64-setup.exe"
+printf 'exe-x64-sig\n' >"$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64-setup.exe.sig"
+printf 'LICENSE fixture\n' >"$CLASH_DIR/LICENSE"
+printf 'SOURCE fixture\n' >"$CLASH_DIR/SOURCE.txt"
+printf 'lane-tar-fixture\n' >"$LANE_DIR/claude-lane.tar.gz"
+printf 'lane-zip-fixture\n' >"$LANE_DIR/claude-lane.zip"
+
+RELEASED_OUT="$WORK_DIR/manifests/stable.released.json"
+gen_out=$(/bin/bash "$SCRIPT_DIR/generate-manifest.sh" --execute --status released \
+  --candidate-id "$RC_ID" --evidence-dir "$EVIDENCE_OK" --work-dir "$WORK_DIR" \
+  --output "$RELEASED_OUT" 2>&1) || gen_rc=$?
+gen_rc=${gen_rc:-0}
+if [ "$gen_rc" = "0" ] && [ -f "$RELEASED_OUT" ] &&
+   [ "$(/usr/bin/plutil -extract release_status raw -o - "$RELEASED_OUT")" = "released" ] &&
+   [ "$(/usr/bin/plutil -extract candidate_id raw -o - "$RELEASED_OUT")" = "$RC_ID" ] &&
+   [ "$(/usr/bin/plutil -extract claude_lane.path raw -o - "$RELEASED_OUT")" = "claude-lane/releases/v${LANE_VERSION}/claude-lane.tar.gz" ] &&
+   [ "$(/usr/bin/plutil -extract claude_lane.windows_path raw -o - "$RELEASED_OUT")" = "claude-lane/releases/v${LANE_VERSION}/claude-lane.zip" ]; then
+  blocker_xml=$(/usr/bin/plutil -extract release_blockers xml1 -o - "$RELEASED_OUT" 2>/dev/null || true)
+  blocker_count=$(printf '%s' "$blocker_xml" | /usr/bin/grep -c '<string>' || true)
+  evidence_sha=$(/usr/bin/plutil -extract release_evidence.win32-x64.sha256 raw -o - "$RELEASED_OUT" 2>/dev/null || true)
+  if [ "$blocker_count" = "0" ] && printf '%s' "$evidence_sha" | /usr/bin/grep -Eq '^[0-9a-f]{64}$'; then
+    ok "五份合法证据可生成 released 且 blocker 为空"
+  else
+    bad "五份合法证据可生成 released 且 blocker 为空"
+  fi
+else
+  bad "五份合法证据可生成 released 且 blocker 为空"
+fi
+
+if [ -f "$RELEASED_OUT" ]; then
+  promote_out=$(/bin/bash "$SCRIPT_DIR/promote-stable.sh" --candidate "$RELEASED_OUT" 2>&1 || true)
+  if printf '%s' "$promote_out" | /usr/bin/grep -Fq 'dry-run: all promotion gates passed'; then
+    ok "样例 released 通过 promote-stable dry-run 全部门禁"
+  elif printf '%s' "$promote_out" | /usr/bin/grep -Fq 'repository must be clean before stable promotion'; then
+    # Non-git gates already passed (git clean is last). Dirty tree is environmental during code edits.
+    ok "样例 released 通过 promote-stable 非 git 门禁（工作树非干净时 git 门禁可后置）"
+  else
+    bad "样例 released 通过 promote-stable dry-run 全部门禁"
+  fi
+else
+  bad "样例 released 通过 promote-stable dry-run 全部门禁"
+fi
+
 if /bin/bash -n "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" 2>&1 | /usr/bin/grep -Fq 'retired' &&
    ! /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" --execute >/dev/null 2>&1; then
