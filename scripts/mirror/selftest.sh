@@ -14,6 +14,12 @@ bad() { FAIL=$((FAIL + 1)); printf 'FAIL  %s\n' "$1" >&2; }
 
 if /usr/bin/plutil -convert xml1 -o /dev/null "$REPO_ROOT/manifests/stable.json" >/dev/null 2>&1; then ok "stable manifest JSON 可解析"; else bad "stable manifest JSON 可解析"; fi
 if [ "$(/usr/bin/plutil -extract release_status raw -o - "$REPO_ROOT/manifests/stable.json")" = blocked ]; then ok "stable manifest 默认阻断"; else bad "stable manifest 默认阻断"; fi
+if /usr/bin/grep -Fqx 'EXPECTED_RELEASE_STATUS="released"' "$REPO_ROOT/bootstrap.sh" &&
+   /usr/bin/grep -Fqx '$ExpectedReleaseStatus = "released"' "$REPO_ROOT/bootstrap.ps1"; then
+  ok "生产 bootstrap 只接受 released"
+else
+  bad "生产 bootstrap 只接受 released"
+fi
 
 for key in clash_verge.arm64 clash_verge.x86_64 clash_verge.win32_arm64 clash_verge.win32_x64; do
   path=$(/usr/bin/plutil -extract "$key.path" raw -o - "$REPO_ROOT/manifests/stable.json" 2>/dev/null || true)
@@ -42,9 +48,26 @@ if printf '%s' "$candidate_output" | /usr/bin/grep -Fq '/tmp/claude-lane-candida
 else
   bad "候选 manifest 默认输出跟随 --work-dir"
 fi
+rc_output=$(/bin/bash "$SCRIPT_DIR/build-bootstrap-candidate.sh" --candidate-id "$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD)" 2>&1)
+if /bin/bash -n "$SCRIPT_DIR/build-bootstrap-candidate.sh" &&
+   printf '%s' "$rc_output" | /usr/bin/grep -Fq 'dry-run: no RC bootstrap entries built' &&
+   /usr/bin/grep -Fq 'EXPECTED_RELEASE_STATUS="candidate"' "$SCRIPT_DIR/build-bootstrap-candidate.sh" &&
+   /usr/bin/grep -Fq 'manifests/candidates/' "$SCRIPT_DIR/build-bootstrap-candidate.sh"; then
+  ok "RC bootstrap 构建器绑定 candidate 状态、commit 路径与 manifest 摘要"
+else
+  bad "RC bootstrap 构建器绑定 candidate 状态、commit 路径与 manifest 摘要"
+fi
+candidate_upload_output=$(/bin/bash "$SCRIPT_DIR/upload.sh" --scope candidate --candidate-id deadbee 2>&1)
+if printf '%s' "$candidate_upload_output" | /usr/bin/grep -Fq 'dry-run'; then ok "RC 上传器默认 dry-run"; else bad "RC 上传器默认 dry-run"; fi
 if /usr/bin/grep -Fq 'x-oss-forbid-overwrite: true' "$SCRIPT_DIR/upload.sh"; then ok "OSS 上传显式禁止覆盖"; else bad "OSS 上传显式禁止覆盖"; fi
 if /usr/bin/grep -Fq 'x-oss-object-acl: public-read' "$SCRIPT_DIR/upload.sh"; then ok "OSS 正式对象使用逐对象 public-read"; else bad "OSS 正式对象使用逐对象 public-read"; fi
 if ! /usr/bin/grep -Eq '(ACCESS_KEY_SECRET=.{8,}|ANTHROPIC_AUTH_TOKEN=.{8,}|sk-[A-Za-z0-9]{12,})' "$REPO_ROOT/manifests/stable.json" "$REPO_ROOT/bootstrap.sh" "$REPO_ROOT/bootstrap.ps1"; then ok "发布清单与启动器无明文凭据"; else bad "发布清单与启动器无明文凭据"; fi
+if ! /usr/bin/grep -Eq 'Unblock-File|ExecutionPolicy' "$REPO_ROOT/bootstrap.ps1" &&
+   /usr/bin/grep -Fq '[scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw))' "$REPO_ROOT/bootstrap.ps1"; then
+  ok "Windows 不解除下载阻止且在已校验归档内存执行"
+else
+  bad "Windows 不解除下载阻止且在已校验归档内存执行"
+fi
 if ! /usr/bin/grep -Eqi 'github\.com|npmjs|brew\.sh|homebrew' "$REPO_ROOT/bootstrap.sh" "$REPO_ROOT/bootstrap.ps1" &&
    /usr/bin/grep -Fq 'anthropic-official-after-proxy' "$REPO_ROOT/bootstrap.sh" "$REPO_ROOT/bootstrap.ps1"; then
   ok "客户端仅在代理后使用固定 Anthropic 官方下载源"

@@ -12,6 +12,8 @@ Set-StrictMode -Version 2.0
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $ExpectedSchema = 1
+$ExpectedReleaseStatus = "released"
+$ReleaseChannel = "stable"
 $ExpectedLaneVersion = "1.3.0"
 $ExpectedClaudeVersion = "2.1.220"
 $ExpectedClashVersion = "2.5.2"
@@ -148,15 +150,15 @@ try {
     if ([string]::IsNullOrWhiteSpace($ManifestFile)) {
         if (Test-Placeholder $PrimaryBaseUrl -or -not $PrimaryBaseUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) { Stop-Bootstrap "国内主下载源尚未发布，启动器保持失败关闭" }
         if (-not [string]::IsNullOrWhiteSpace($BackupBaseUrl) -and (Test-Placeholder $BackupBaseUrl -or -not $BackupBaseUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase))) { Stop-Bootstrap "备用下载源配置无效" }
-        if (-not (Test-Sha256 $StableManifestSha256)) { Stop-Bootstrap "stable manifest 固定摘要尚未发布" }
+        if (-not (Test-Sha256 $StableManifestSha256)) { Stop-Bootstrap "$ReleaseChannel manifest 固定摘要尚未发布" }
         $ManifestFile = Join-Path $TempRoot "stable.json"
-        Get-CheckedArtifact $StableManifestPath $StableManifestSha256 $ManifestFile "stable manifest"
+        Get-CheckedArtifact $StableManifestPath $StableManifestSha256 $ManifestFile "$ReleaseChannel manifest"
     }
     $ManifestFile = (Resolve-Path -LiteralPath $ManifestFile).Path
     $Manifest = Get-Content -LiteralPath $ManifestFile -Raw | ConvertFrom-Json
 
     if ([int]$Manifest.schema -ne $ExpectedSchema) { Stop-Bootstrap "不支持的 manifest schema" }
-    if ([string]$Manifest.release_status -ne "released") { Stop-Bootstrap "manifest 尚未达到 released 状态" }
+    if ([string]$Manifest.release_status -ne $ExpectedReleaseStatus) { Stop-Bootstrap "manifest 尚未达到 $ExpectedReleaseStatus 状态" }
     if ([string]$Manifest.claude_lane.version -ne $ExpectedLaneVersion -or [string]$Manifest.claude_code.version -ne $ExpectedClaudeVersion -or [string]$Manifest.clash_verge.version -ne $ExpectedClashVersion) { Stop-Bootstrap "manifest 固定版本漂移" }
     if ([string]$Manifest.minimum_windows -ne "10.0.17763") { Stop-Bootstrap "Windows 最低版本门禁漂移" }
 
@@ -228,10 +230,10 @@ try {
     $StateScript = Join-Path $ReleaseTarget "scripts\setup-state.ps1"
     $CheckpointScript = Join-Path $ReleaseTarget "scripts\windows-subscription-checkpoint.ps1"
     if (-not (Test-Path -LiteralPath $StateScript -PathType Leaf) -or -not (Test-Path -LiteralPath $CheckpointScript -PathType Leaf)) { Stop-Bootstrap "安装包缺少订阅检查点" }
-    Unblock-File -LiteralPath $StateScript
-    Unblock-File -LiteralPath $CheckpointScript
-    if (-not $ResumeReady) { & $StateScript -Set CLASH_INSTALLED -Reason clash_installed | Out-Null }
-    $CheckpointOutput = @(& $CheckpointScript)
+    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateScript -Raw))
+    $CheckpointBlock = [scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw))
+    if (-not $ResumeReady) { & $StateBlock -Set CLASH_INSTALLED -Reason clash_installed | Out-Null }
+    $CheckpointOutput = @(& $CheckpointBlock -ScriptRoot (Split-Path -Parent $CheckpointScript))
     $CheckpointOutput | Write-Output
     if ($CheckpointOutput -contains "SETUP_STATE=WAITING_FOR_SUBSCRIPTION") {
         Write-Output "Windows 固定版下载与安装阶段完成；当前正常暂停在“等待机场订阅”。"
@@ -260,7 +262,6 @@ try {
 
     $DeepSeekLauncher = Join-Path $ReleaseTarget "scripts\windows-deepseek.ps1"
     if (-not (Test-Path -LiteralPath $DeepSeekLauncher -PathType Leaf)) { Stop-Bootstrap "安装包缺少 Windows DeepSeek 启动器" }
-    Unblock-File -LiteralPath $DeepSeekLauncher
     Write-Output "Claude Code 官方固定版安装与签名校验通过；进入本地 DeepSeek 与专线配置阶段。"
     $LauncherText = Get-Content -LiteralPath $DeepSeekLauncher -Raw
     & ([scriptblock]::Create($LauncherText))

@@ -41,12 +41,12 @@ if ($PSCmdlet.ParameterSetName -eq "Set") {
         Remove-Item -LiteralPath $TempFile -Force -ErrorAction SilentlyContinue
     }
     Write-Output "SETUP_STATE=$Set"
-    exit 0
+    return
 }
 
 if (-not (Test-Path -LiteralPath $StateFile -PathType Leaf)) {
     Write-Output "NOT_STARTED"
-    exit 0
+    return
 }
 $Document = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
 if ([int]$Document.schema -ne 1 -or $AllowedStates -notcontains [string]$Document.state) { throw "安装进度文件损坏或包含未知状态" }

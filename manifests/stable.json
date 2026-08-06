@@ -2,7 +2,7 @@
   "schema": 1,
   "release_status": "blocked",
   "release_blockers": [
-    "the updated claude-lane runtime archives have not been built from a clean reviewed commit",
+    "the immutable RC bootstrap entry objects have not been uploaded and re-downloaded",
     "macOS Intel and Windows x64/ARM64 end-to-end installation have not run",
     "stable bootstrap entry objects have not been uploaded and re-downloaded"
   ],

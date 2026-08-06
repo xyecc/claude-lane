@@ -65,12 +65,20 @@ try {
         if ($null -eq $OldStateRoot) { Remove-Item Env:CLAUDE_LANE_SETUP_ROOT -ErrorAction SilentlyContinue } else { $env:CLAUDE_LANE_SETUP_ROOT = $OldStateRoot }
     }
     $BootstrapText = Get-Content -LiteralPath $Bootstrap -Raw
-    $CheckpointPosition = $BootstrapText.IndexOf('$CheckpointOutput = @(& $CheckpointScript)')
+    $CheckpointPosition = $BootstrapText.IndexOf('$CheckpointOutput = @(& $CheckpointBlock')
     $OfficialDownloadPosition = $BootstrapText.IndexOf('Invoke-Download $OfficialClaudeUrl $ClaudeDownload')
     if ($CheckpointPosition -ge 0 -and $OfficialDownloadPosition -gt $CheckpointPosition) {
         Pass "Windows Anthropic 官方下载严格位于订阅检查点之后"
     } else {
         Fail "Windows Anthropic 官方下载严格位于订阅检查点之后" "调用顺序不安全"
+    }
+    if ($BootstrapText -notmatch 'Unblock-File|ExecutionPolicy' -and
+        $BootstrapText -match '\[scriptblock\]::Create\(\(Get-Content -LiteralPath \$CheckpointScript -Raw\)\)' -and
+        (Get-Content -LiteralPath $StateTool -Raw) -notmatch 'exit\s+0' -and
+        (Get-Content -LiteralPath $SubscriptionCheckpoint -Raw) -notmatch 'exit\s+0') {
+        Pass "Windows 不改执行策略且在已校验归档内存执行"
+    } else {
+        Fail "Windows 不改执行策略且在已校验归档内存执行" "仍存在解除阻止或文件执行入口"
     }
     if ($BootstrapText -match 'Assert-DirectoryTree' -and $BootstrapText -match '不重复下载 Clash 安装包' -and $BootstrapText -match 'WAITING_FOR_SUBSCRIPTION.*SUBSCRIPTION_IMPORTED') {
         Pass "Windows 续跑重验 lane 且不重复下载 Clash 安装包"

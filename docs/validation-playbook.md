@@ -31,17 +31,38 @@ bash scripts/mirror/verify-artifacts.sh
 
 真实专线路由实验必须由执行 Agent 完整读取 `RUNBOOK.md` 后，从 Phase -1 开始。Phase 5 六项全绿、Phase 6 清理完成、普通 `claude` 不再指向 DeepSeek，且用户完成正常登录，才记录 Apple Silicon 通过。
 
-当前 stable 是 `blocked`，不得通过测试注入参数把生产 `bootstrap.sh` 当作已发布启动器运行。无依赖干净 Mac 的 Bootstrap 端到端验收要等主源候选制品就绪后执行。
+当前 stable 是 `blocked`，不得通过测试注入参数把生产 `bootstrap.sh` 当作已发布启动器运行。发布者提供 commit 绑定的 RC 地址后，Apple Silicon 与 Intel Mac 分别执行该地址；入口只接受对应 commit 的候选清单。
+
+```bash
+curl -fL "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/candidates/<commit>/install.sh" -o /tmp/claude-lane-rc.sh
+shasum -a 256 /tmp/claude-lane-rc.sh
+bash /tmp/claude-lane-rc.sh
+```
+
+先把显示的摘要与发布者提供的 `evidence.txt` 对照；不一致立即停止。
 
 ## Windows x64 / ARM64
 
-不再生成或传输大体积 Windows 验证 ZIP。stable 入口发布前，发布者把同一份 `bootstrap.ps1` 作为候选脚本放到受控 Windows x64 与 ARM64 主机；stable 发布后，用户入口为：
+不再生成或传输大体积 Windows 验证 ZIP。stable 入口发布前，两种 Windows 真机直接下载同一 commit 的 RC：
+
+```powershell
+$id = "<commit>"
+$base = "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/candidates/$id"
+Invoke-WebRequest "$base/install.ps1" -OutFile "$env:TEMP\claude-lane-rc.ps1"
+Invoke-WebRequest "$base/evidence.txt" -OutFile "$env:TEMP\claude-lane-evidence.txt"
+$expected = ((Select-String '^install_ps1_sha256=' "$env:TEMP\claude-lane-evidence.txt").Line -split '=', 2)[1]
+$actual = (Get-FileHash "$env:TEMP\claude-lane-rc.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "RC 启动器 SHA-256 不匹配" }
+& ([scriptblock]::Create((Get-Content "$env:TEMP\claude-lane-rc.ps1" -Raw)))
+```
+
+先将哈希与 evidence 中的 `install_ps1_sha256` 对照。不得使用 `ExecutionPolicy Bypass`、`Unblock-File` 或关闭 SmartScreen。stable 发布后，用户入口才是：
 
 ```powershell
 irm https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/releases/bootstrap/v1/install.ps1 | iex
 ```
 
-该命令目前仅表示最终固定路径，`manifests/stable.json` 仍为 `blocked` 时不得执行。候选验证必须确认：系统临时目录下载、架构自动识别、Clash 固定 SHA-256、上游 Tauri minisign、运行时 Authenticode、安装成功和订阅检查点全部成立。
+最终命令目前仅表示固定路径，`manifests/stable.json` 仍为 `blocked` 时不得执行。候选验证必须确认：系统临时目录下载、架构自动识别、Clash 固定 SHA-256、上游 Tauri minisign、运行时 Authenticode、安装成功和订阅检查点全部成立。
 
 没有订阅时保存 `WAITING_FOR_SUBSCRIPTION` 并正常结束；用户在 Clash Verge GUI 本地导入后，重新运行同一命令。代理通过后才允许从 Anthropic 官方固定版 URL 下载 Claude Code，并强制核对 SHA-256、Authenticode 和版本。随后才隐藏读取 DeepSeek API Key、完成文本握手并进入临时 Claude Code 会话。它不自动修改 Windows 专线路由。
 

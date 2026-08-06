@@ -11,9 +11,11 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 OUTPUT=""
 TEMPLATE="$MIRROR_REPO_ROOT/manifests/stable.json"
+RELEASE_STATUS=blocked
+CANDIDATE_ID=""
 
 usage() {
-  printf '%s\n' '用法：bash scripts/mirror/generate-manifest.sh [--execute] [--output <path>] [--work-dir <path>]'
+  printf '%s\n' '用法：bash scripts/mirror/generate-manifest.sh [--execute] [--output <path>] [--work-dir <path>] [--status blocked|candidate] [--candidate-id <git-id>]'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -21,11 +23,20 @@ while [ "$#" -gt 0 ]; do
     --execute) MIRROR_EXECUTE=1 ;;
     --output) [ "$#" -ge 2 ] || mirror_die "--output requires a value"; OUTPUT=$2; shift ;;
     --work-dir) [ "$#" -ge 2 ] || mirror_die "--work-dir requires a value"; MIRROR_WORK_DIR=$2; shift ;;
+    --status) [ "$#" -ge 2 ] || mirror_die "--status requires a value"; RELEASE_STATUS=$2; shift ;;
+    --candidate-id) [ "$#" -ge 2 ] || mirror_die "--candidate-id requires a value"; CANDIDATE_ID=$2; shift ;;
     -h|--help) usage; exit 0 ;;
     *) mirror_die "unknown argument: $1" ;;
   esac
   shift
 done
+
+[ "$RELEASE_STATUS" = blocked ] || [ "$RELEASE_STATUS" = candidate ] || mirror_die "status must be blocked or candidate"
+if [ "$RELEASE_STATUS" = candidate ]; then
+  printf '%s' "$CANDIDATE_ID" | LC_ALL=C /usr/bin/grep -Eq '^[0-9a-f]{7,40}$' || mirror_die "candidate status requires a hexadecimal git candidate id"
+elif [ -n "$CANDIDATE_ID" ]; then
+  mirror_die "--candidate-id is only valid with --status candidate"
+fi
 
 # `--work-dir` 可能改变候选根目录，因此默认输出必须在参数解析完成后计算。
 # 显式 `--output` 仍保持调用方指定的位置。
@@ -76,6 +87,13 @@ fi
 /bin/mkdir -p "$(dirname "$OUTPUT")" || mirror_die "cannot create output directory"
 TMP_OUTPUT="${OUTPUT}.tmp.$$"
 /bin/cp "$TEMPLATE" "$TMP_OUTPUT" || mirror_die "cannot copy manifest template"
+/usr/bin/plutil -replace release_status -string "$RELEASE_STATUS" "$TMP_OUTPUT" || mirror_die "cannot update release status"
+if [ "$RELEASE_STATUS" = candidate ]; then
+  /usr/bin/plutil -insert candidate_id -string "$CANDIDATE_ID" "$TMP_OUTPUT" 2>/dev/null ||
+    /usr/bin/plutil -replace candidate_id -string "$CANDIDATE_ID" "$TMP_OUTPUT" || mirror_die "cannot record candidate id"
+else
+  /usr/bin/plutil -remove candidate_id "$TMP_OUTPUT" >/dev/null 2>&1 || true
+fi
 
 replace_file_metadata() {
   key=$1
@@ -102,4 +120,4 @@ replace_file_metadata clash_verge.win32_x64 "$CLASH_DIR/Clash.Verge_${CLASH_VERS
 /usr/bin/plutil -convert json -o "$TMP_OUTPUT.json" "$TMP_OUTPUT" || mirror_die "candidate is not valid JSON"
 /bin/mv "$TMP_OUTPUT.json" "$OUTPUT" || mirror_die "cannot finalize candidate"
 /bin/rm -f "$TMP_OUTPUT"
-mirror_say "candidate manifest generated (still blocked): $OUTPUT"
+mirror_say "manifest generated with status $RELEASE_STATUS: $OUTPUT"

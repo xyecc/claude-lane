@@ -1,8 +1,17 @@
 # 只判断 Clash Verge 是否已有当前远程订阅；绝不输出订阅 URL。
+[CmdletBinding()]
+param(
+    [string]$ScriptRoot = ""
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptDir = if (-not [string]::IsNullOrWhiteSpace($ScriptRoot)) {
+    (Resolve-Path -LiteralPath $ScriptRoot).Path
+} else {
+    Split-Path -Parent $MyInvocation.MyCommand.Path
+}
 $StateTool = Join-Path $ScriptDir "setup-state.ps1"
 $ConfigRoot = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_LANE_CLASH_CFG)) {
     $env:CLAUDE_LANE_CLASH_CFG
@@ -12,14 +21,16 @@ $ConfigRoot = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_LANE_CLASH_CFG))
 $Profiles = Join-Path $ConfigRoot "profiles.yaml"
 
 function Set-Progress([string]$State, [string]$Reason) {
-    & $StateTool -Set $State -Reason $Reason | Out-Null
+    if (-not (Test-Path -LiteralPath $StateTool -PathType Leaf)) { throw "安装包缺少进度状态工具" }
+    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateTool -Raw))
+    & $StateBlock -Set $State -Reason $Reason | Out-Null
 }
 
 if (-not (Test-Path -LiteralPath $Profiles -PathType Leaf)) {
     Set-Progress "WAITING_FOR_SUBSCRIPTION" "profiles_missing"
     Write-Output "SETUP_STATE=WAITING_FOR_SUBSCRIPTION"
     Write-Output "NEXT_ACTION=OPEN_CLASH_AND_IMPORT_SUBSCRIPTION"
-    exit 0
+    return
 }
 
 # Clash Verge 的 profiles.yaml 不是通用 YAML API。这里只接受它写出的窄格式：
@@ -37,7 +48,7 @@ if ([string]::IsNullOrWhiteSpace($CurrentUid) -or $CurrentUid -match '^(?i:null|
     Set-Progress "WAITING_FOR_SUBSCRIPTION" "subscription_not_imported"
     Write-Output "SETUP_STATE=WAITING_FOR_SUBSCRIPTION"
     Write-Output "NEXT_ACTION=OPEN_CLASH_AND_IMPORT_SUBSCRIPTION"
-    exit 0
+    return
 }
 if ($CurrentUid -notmatch '^[A-Za-z0-9]{1,128}$') { throw "profiles.yaml 的 current 格式不受支持" }
 $ItemStarts = @()

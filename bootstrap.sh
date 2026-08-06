@@ -9,6 +9,8 @@ umask 077
 
 BOOTSTRAP_VERSION="1"
 EXPECTED_SCHEMA="1"
+EXPECTED_RELEASE_STATUS="released"
+RELEASE_CHANNEL="stable"
 EXPECTED_LANE_VERSION="1.3.0"
 EXPECTED_CLAUDE_VERSION="2.1.220"
 EXPECTED_CLASH_VERSION="2.5.2"
@@ -346,7 +348,7 @@ validate_release_block() {
       *) die "备用下载源必须使用 HTTPS" ;;
     esac
   fi
-  valid_sha256 "$STABLE_MANIFEST_SHA256" || die "stable manifest 的固定 SHA-256 尚未发布"
+  valid_sha256 "$STABLE_MANIFEST_SHA256" || die "${RELEASE_CHANNEL} manifest 的固定 SHA-256 尚未发布"
 }
 
 load_manifest() {
@@ -360,7 +362,7 @@ load_manifest() {
   validate_release_block
   make_temp_dir
   MANIFEST_FILE="$BOOT_TMP/stable.json"
-  download_checked "$STABLE_MANIFEST_PATH" "$STABLE_MANIFEST_SHA256" "$MANIFEST_FILE" "stable manifest"
+  download_checked "$STABLE_MANIFEST_PATH" "$STABLE_MANIFEST_SHA256" "$MANIFEST_FILE" "${RELEASE_CHANNEL} manifest"
 }
 
 validate_manifest() {
@@ -399,7 +401,7 @@ validate_manifest() {
   clash_win_x64_status=$(manifest_get clash_verge.win32_x64.signature_status) || die "manifest 缺少 Clash Verge Windows x64 签名状态"
 
   [ "$manifest_schema" = "$EXPECTED_SCHEMA" ] || die "不支持的 manifest schema：$manifest_schema"
-  [ "$release_status" = "released" ] || die "manifest 尚未达到 released 状态"
+  [ "$release_status" = "$EXPECTED_RELEASE_STATUS" ] || die "manifest 尚未达到 ${EXPECTED_RELEASE_STATUS} 状态"
   [ "$lane_version" = "$EXPECTED_LANE_VERSION" ] || die "claude-lane 版本未固定为 $EXPECTED_LANE_VERSION"
   [ "$claude_version" = "$EXPECTED_CLAUDE_VERSION" ] || die "Claude Code 版本未固定为 $EXPECTED_CLAUDE_VERSION"
   [ "$claude_distribution" = "anthropic-official-after-proxy" ] || die "Claude Code 必须在代理可用后从 Anthropic 官方源安装"

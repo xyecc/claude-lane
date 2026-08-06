@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-`bootstrap.sh` 与 `bootstrap.ps1` 是 manifest 驱动、可暂停恢复的确定性启动器。当前已固定 Claude Code `2.1.220` 和 Clash Verge Rev `2.5.2` 的 macOS / Windows 双架构摘要。Clash 原始制品已上传阿里云 OSS 并完成匿名回下载校验；Claude Code 只在订阅代理可用后从 Anthropic 官方固定版本地址下载。备用源暂缓，lane 归档与全部真机证据未齐，因此 `manifests/stable.json` 继续处于门禁状态。
+`bootstrap.sh` 与 `bootstrap.ps1` 是 manifest 驱动、可暂停恢复的确定性启动器。当前已固定 Claude Code `2.1.220` 和 Clash Verge Rev `2.5.2` 的 macOS / Windows 双架构摘要。Clash 原始制品已上传阿里云 OSS 并完成匿名回下载校验；Claude Code 只在订阅代理可用后从 Anthropic 官方固定版本地址下载。备用源暂缓，全部真机证据未齐，因此 `manifests/stable.json` 继续处于门禁状态。
 
-启动器发现示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或哈希不一致时，必须在修改系统前停止。现在没有公开的 `curl | bash` 地址，也没有已经验收的离线包。不要删除校验、填写随意哈希或临时改用第三方镜像绕过门禁。
+启动器发现示例域名、`TBD`、空值、非 64 位 SHA-256、下载失败或哈希不一致时，必须在修改系统前停止。正式 stable 仍没有可执行的公开入口。真机只使用发布者生成的 commit 绑定 RC；不要删除校验、填写随意哈希或临时改用第三方镜像绕过门禁。
 
 ## 目标边界
 
@@ -35,6 +35,7 @@ Windows 不再使用含大体积安装包的搬运验证包。正式候选直接
 |---|---|
 | `schema` | 必须为启动器明确支持的整数版本，当前为 `1` |
 | `release_status` | 发布状态；未达到可发布值时停止 |
+| `candidate_id` | 仅 RC 清单存在；必须与候选入口绑定的 Git commit 前缀一致 |
 | `minimum_macos` | 启动器允许的最低 macOS 版本 |
 | `minimum_windows` | Windows 启动器允许的最低版本，当前为 Windows 10 1809 |
 | `required_free_mb` | 开始下载 / 安装前要求的最小可用磁盘空间（MiB） |
@@ -54,6 +55,8 @@ Windows 不再使用含大体积安装包的搬运验证包。正式候选直接
 | `clash_verge.win32_arm64` / `.win32_x64` | Windows 正式安装器、Tauri 签名和 Authenticode 验证状态 |
 
 国内主、备 HTTPS 基址和 **stable manifest 自身的固定 SHA-256** 位于 `bootstrap.sh` 的发布块，不由远端 manifest 自行决定。启动器先从固化的主源、备用源下载 manifest 并核对该摘要，再解析其中的相对 `path`；这样被替换的远端清单不能把下载重定向到新域名。
+
+生产源码只接受 `release_status=released` 与 `manifests/stable.json`。`build-bootstrap-candidate.sh` 从干净 commit 生成一次性 RC，改为只接受 `release_status=candidate` 和 `manifests/candidates/<commit>.json`，并把该清单摘要写死在 RC 中。RC 对象不可覆盖，不能被当成 stable 晋级捷径。
 
 启动器按 `uname -m` 只选择当前架构条目。主源失败或产物校验不通过时可以尝试备用源，但备用源仍必须命中**同一个固定 SHA-256**；两个源都失败就停止，不得改用搜索结果或 `latest`。
 
@@ -108,12 +111,15 @@ CDN 返回的 `ETag`、`Content-MD5` 或旁路哈希不能替代官方签名 man
 ```text
 /claude-lane/releases/bootstrap/v1/install.sh
 /claude-lane/releases/bootstrap/v1/install.ps1
+/claude-lane/candidates/<commit>/install.sh
+/claude-lane/candidates/<commit>/install.ps1
 /claude-lane/releases/v1.3.0/claude-lane.tar.gz
 /clash-verge/releases/<version>/Clash.Verge_<version>_aarch64.dmg
 /clash-verge/releases/<version>/Clash.Verge_<version>_x64.dmg
 /clash-verge/releases/<version>/Clash.Verge_<version>_arm64-setup.exe
 /clash-verge/releases/<version>/Clash.Verge_<version>_x64-setup.exe
 /manifests/stable.json
+/manifests/candidates/<commit>.json
 /licenses/clash-verge-rev-GPL-3.0.txt
 ```
 

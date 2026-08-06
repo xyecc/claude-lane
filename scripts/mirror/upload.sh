@@ -15,6 +15,8 @@ ENV_FILE="$MIRROR_REPO_ROOT/.env"
 SINGLE_FILE=""
 SINGLE_KEY=""
 UPLOAD_SCOPE=all
+CANDIDATE_ID=""
+CANDIDATE_DIR=""
 OSS_ACCESS_KEY_ID=""
 OSS_ACCESS_KEY_SECRET=""
 OSS_BUCKET=""
@@ -24,7 +26,7 @@ REQUEST_ID=0
 HTTP_STATUS=""
 
 usage() {
-  printf '%s\n' '用法：bash scripts/mirror/upload.sh [--execute] [--profile primary|backup] [--scope all|upstream|lane|bootstrap] [--env-file <path>] [--file <path> --key <object>]'
+  printf '%s\n' '用法：bash scripts/mirror/upload.sh [--execute] [--profile primary|backup] [--scope all|upstream|lane|bootstrap|candidate] [--candidate-id <git-id>] [--candidate-dir <path>] [--env-file <path>] [--file <path> --key <object>]'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -35,6 +37,8 @@ while [ "$#" -gt 0 ]; do
     --file) [ "$#" -ge 2 ] || mirror_die "--file requires a value"; SINGLE_FILE=$2; shift ;;
     --key) [ "$#" -ge 2 ] || mirror_die "--key requires a value"; SINGLE_KEY=$2; shift ;;
     --scope) [ "$#" -ge 2 ] || mirror_die "--scope requires a value"; UPLOAD_SCOPE=$2; shift ;;
+    --candidate-id) [ "$#" -ge 2 ] || mirror_die "--candidate-id requires a value"; CANDIDATE_ID=$2; shift ;;
+    --candidate-dir) [ "$#" -ge 2 ] || mirror_die "--candidate-dir requires a value"; CANDIDATE_DIR=$2; shift ;;
     --work-dir) [ "$#" -ge 2 ] || mirror_die "--work-dir requires a value"; MIRROR_WORK_DIR=$2; shift ;;
     -h|--help) usage; exit 0 ;;
     *) mirror_die "unknown argument: $1" ;;
@@ -42,11 +46,15 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 [ "$PROFILE" = primary ] || [ "$PROFILE" = backup ] || mirror_die "profile must be primary or backup"
-[ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = upstream ] || [ "$UPLOAD_SCOPE" = lane ] || [ "$UPLOAD_SCOPE" = bootstrap ] || mirror_die "scope must be all, upstream, lane, or bootstrap"
+[ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = upstream ] || [ "$UPLOAD_SCOPE" = lane ] || [ "$UPLOAD_SCOPE" = bootstrap ] || [ "$UPLOAD_SCOPE" = candidate ] || mirror_die "scope must be all, upstream, lane, bootstrap, or candidate"
+if [ "$UPLOAD_SCOPE" = candidate ]; then
+  printf '%s' "$CANDIDATE_ID" | LC_ALL=C /usr/bin/grep -Eq '^[0-9a-f]{7,40}$' || mirror_die "candidate scope requires --candidate-id"
+  [ -n "$CANDIDATE_DIR" ] || CANDIDATE_DIR="$MIRROR_WORK_DIR/candidates/$CANDIDATE_ID"
+fi
 if [ -n "$SINGLE_FILE$SINGLE_KEY" ]; then [ -n "$SINGLE_FILE" ] && [ -n "$SINGLE_KEY" ] || mirror_die "--file and --key must be used together"; fi
 
 valid_key() {
-  printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '^(claude-lane|claude-code|clash-verge)/releases/[A-Za-z0-9._/-]+$|^manifests/[A-Za-z0-9._/-]+$' || return 1
+  printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '^(claude-lane|claude-code|clash-verge)/releases/[A-Za-z0-9._/-]+$|^claude-lane/candidates/[A-Za-z0-9._/-]+$|^manifests/[A-Za-z0-9._/-]+$' || return 1
   printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '(^|/)\.\.(/|$)' && return 1
   return 0
 }
@@ -146,6 +154,15 @@ upload_one() {
 
 if [ -n "$SINGLE_FILE" ]; then
   upload_one "$SINGLE_FILE" "$SINGLE_KEY"
+  exit 0
+fi
+
+if [ "$UPLOAD_SCOPE" = candidate ]; then
+  upload_one "$CANDIDATE_DIR/manifests/stable.candidate.json" "manifests/candidates/$CANDIDATE_ID.json"
+  upload_one "$CANDIDATE_DIR/bootstrap/install.sh" "claude-lane/candidates/$CANDIDATE_ID/install.sh"
+  upload_one "$CANDIDATE_DIR/bootstrap/install.ps1" "claude-lane/candidates/$CANDIDATE_ID/install.ps1"
+  upload_one "$CANDIDATE_DIR/bootstrap/evidence.txt" "claude-lane/candidates/$CANDIDATE_ID/evidence.txt"
+  mirror_say "candidate upload complete; stable objects were not touched"
   exit 0
 fi
 
