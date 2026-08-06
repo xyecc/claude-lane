@@ -59,6 +59,12 @@ else
 fi
 candidate_upload_output=$(/bin/bash "$SCRIPT_DIR/upload.sh" --scope candidate --candidate-id deadbee 2>&1)
 if printf '%s' "$candidate_upload_output" | /usr/bin/grep -Fq 'dry-run'; then ok "RC 上传器默认 dry-run"; else bad "RC 上传器默认 dry-run"; fi
+if /usr/bin/grep -Fq 'claude-lane/candidates/$CANDIDATE_ID/claude-lane.tar.gz' "$SCRIPT_DIR/generate-manifest.sh" &&
+   /usr/bin/grep -Fq 'claude-lane/candidates/$CANDIDATE_ID/claude-lane.zip' "$SCRIPT_DIR/upload.sh"; then
+  ok "RC lane 归档使用 commit 专属不可覆盖路径"
+else
+  bad "RC lane 归档使用 commit 专属不可覆盖路径"
+fi
 if /usr/bin/grep -Fq 'x-oss-forbid-overwrite: true' "$SCRIPT_DIR/upload.sh"; then ok "OSS 上传显式禁止覆盖"; else bad "OSS 上传显式禁止覆盖"; fi
 if /usr/bin/grep -Fq 'x-oss-object-acl: public-read' "$SCRIPT_DIR/upload.sh"; then ok "OSS 正式对象使用逐对象 public-read"; else bad "OSS 正式对象使用逐对象 public-read"; fi
 if ! /usr/bin/grep -Eq '(ACCESS_KEY_SECRET=.{8,}|ANTHROPIC_AUTH_TOKEN=.{8,}|sk-[A-Za-z0-9]{12,})' "$REPO_ROOT/manifests/stable.json" "$REPO_ROOT/bootstrap.sh" "$REPO_ROOT/bootstrap.ps1"; then ok "发布清单与启动器无明文凭据"; else bad "发布清单与启动器无明文凭据"; fi

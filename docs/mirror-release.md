@@ -55,6 +55,8 @@ bash scripts/mirror/upload.sh --execute --profile primary \
 
 ```text
 manifests/candidates/<commit>.json
+claude-lane/candidates/<commit>/claude-lane.tar.gz
+claude-lane/candidates/<commit>/claude-lane.zip
 claude-lane/candidates/<commit>/install.sh
 claude-lane/candidates/<commit>/install.ps1
 claude-lane/candidates/<commit>/evidence.txt
