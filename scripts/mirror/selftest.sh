@@ -100,6 +100,12 @@ else
   bad "lane 白名单包含 Windows 审计证据与运行期自测脚本"
 fi
 
+if /usr/bin/grep -Fq 'scripts/windows-complete.ps1' "$SCRIPT_DIR/build-lane.sh"; then
+  ok "lane 白名单包含 Windows Phase 6 收尾脚本"
+else
+  bad "lane 白名单包含 Windows Phase 6 收尾脚本"
+fi
+
 if /usr/bin/grep -Fq 'scripts/macos-evidence.sh' "$SCRIPT_DIR/build-lane.sh"; then
   ok "lane 白名单包含 macOS 审计证据脚本"
 else

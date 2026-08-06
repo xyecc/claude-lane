@@ -21,6 +21,7 @@ $SubscriptionCheckpoint = Join-Path $ResolvedScriptRoot "windows-subscription-ch
 $RoutingTool = Join-Path $ResolvedScriptRoot "windows-routing.ps1"
 $RoutingVerifier = Join-Path $ResolvedScriptRoot "windows-verify.ps1"
 $RoutingRollback = Join-Path $ResolvedScriptRoot "windows-rollback.ps1"
+$CompleteTool = Join-Path $ResolvedScriptRoot "windows-complete.ps1"
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-windows-runtime-selftest-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $TempRoot | Out-Null
 $Passed = 0
@@ -46,6 +47,7 @@ try {
     Test-PowerShellSyntax "Windows 专线路由配置语法" $RoutingTool
     Test-PowerShellSyntax "Windows 专线路由六项验证语法" $RoutingVerifier
     Test-PowerShellSyntax "Windows 专线路由回滚语法" $RoutingRollback
+    Test-PowerShellSyntax "Windows Phase 6 收尾语法" $CompleteTool
 
     $CheckpointConfig = Join-Path $TempRoot "checkpoint-config"
     $CheckpointState = Join-Path $TempRoot "checkpoint-state"
@@ -140,6 +142,59 @@ items:
         Pass "DeepSeek 临时会话隔离工具并清理配置"
     } else {
         Fail "DeepSeek 临时会话隔离工具并清理配置" "工具或清理静态门禁未满足"
+    }
+
+    $CompleteText = Get-Content -LiteralPath $CompleteTool -Raw -Encoding UTF8
+    $ResidueNames = @(
+        "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CONFIG_DIR",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+        "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB", "DISABLE_LOGIN_COMMAND", "DISABLE_UPDATES", "DISABLE_AUTOUPDATER"
+    )
+    $MissingEnvNames = @($ResidueNames | Where-Object { $CompleteText -notmatch [regex]::Escape($_) })
+    # Entry order: gate → residue → clean login → human checklist → COMPLETED write.
+    $EntryOrderOk = $CompleteText -match '(?s)Assert-ValidationPassed\s+Test-DeepSeekResidue\s+Start-CleanClaudeLogin\s+Confirm-HumanChecklist\s+Set-CompletedState'
+    $CheckOnlyOk = $CompleteText -match '(?s)if\s*\(\s*\$CheckOnly\s*\)\s*\{[^}]*Test-DeepSeekResidue'
+    $CompletedOnlyInSetter = ($CompleteText -match '-Set COMPLETED') -and
+        ($CompleteText.IndexOf('function Set-CompletedState') -ge 0) -and
+        ($CompleteText.IndexOf('-Set COMPLETED') -gt $CompleteText.IndexOf('function Set-CompletedState')) -and
+        ($CompleteText.IndexOf('function Set-CompletedState') -gt $CompleteText.IndexOf('function Confirm-HumanChecklist'))
+    if ($MissingEnvNames.Count -eq 0 -and $EntryOrderOk -and $CheckOnlyOk -and $CompletedOnlyInSetter -and
+        $CompleteText -match '\[switch\]\$CheckOnly' -and
+        $CompleteText -match 'VALIDATION_PASSED' -and
+        $CompleteText -match 'claude-lane-deepseek-\*' -and
+        $CompleteText -match 'EnvironmentVariableTarget\]::User' -and
+        $CompleteText -match 'EnvironmentVariableTarget\]::Machine' -and
+        $CompleteText -match 'PHASE6 COMPLETED: windows' -and
+        $CompleteText -match 'Test-Path -Path \("Env:"' -and
+        $CompleteText -notmatch 'Write-Output.*\$env:ANTHROPIC' -and
+        $CompleteText -notmatch 'Write-Host.*\$env:ANTHROPIC') {
+        Pass "Phase 6 收尾：16 变量残留检查、VALIDATION_PASSED 前置、COMPLETED 仅清单后写入"
+    } else {
+        Fail "Phase 6 收尾：16 变量残留检查、VALIDATION_PASSED 前置、COMPLETED 仅清单后写入" (
+            "static gate failed; missing names=" + ($MissingEnvNames -join ","))
+    }
+
+    $ProbeValue = "sandbox-residue-value-must-never-appear-" + [guid]::NewGuid().ToString("N")
+    $OldProbe = [Environment]::GetEnvironmentVariable("ANTHROPIC_BASE_URL", "Process")
+    try {
+        [Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", $ProbeValue, "Process")
+        $CheckOutput = (& powershell.exe -NoProfile -File $CompleteTool -CheckOnly -ScriptRoot $ResolvedScriptRoot 2>&1 | Out-String)
+        $CheckExit = $LASTEXITCODE
+        if ($CheckExit -ne 0 -and $CheckOutput -notmatch [regex]::Escape($ProbeValue) -and
+            $CheckOutput -match 'ANTHROPIC_BASE_URL' -and $CheckOutput -match '禁止登录 Anthropic') {
+            Pass "伪造残留环境变量时 -CheckOnly 拒绝通过且不输出变量值"
+        } else {
+            Fail "伪造残留环境变量时 -CheckOnly 拒绝通过且不输出变量值" (
+                "exit=$CheckExit output=" + $CheckOutput.Trim())
+        }
+    } finally {
+        if ($null -eq $OldProbe) {
+            [Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", $null, "Process")
+        } else {
+            [Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", $OldProbe, "Process")
+        }
     }
 } finally {
     Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue

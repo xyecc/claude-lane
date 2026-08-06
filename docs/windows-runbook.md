@@ -70,3 +70,31 @@ $p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-evidence.ps1
 **只把这一个 `audit\<platform>.json` 回传给发布方。** 证据落盘前会扫描 `sk-…` 与 IPv4/IPv6 模式；匹配则失败关闭且不写文件。
 
 当前实现仍必须在 Windows x64 与 ARM64 真机分别通过 PowerShell 语法、配置写入、回滚和出口实测，才能晋级 stable。
+
+## Phase 6：退出临时模式并完成登录收尾
+
+**只有六项验证已通过（`setup-progress.json` 状态为 `VALIDATION_PASSED`）后才能进入。** 在已安装 lane 目录内以内存脚本块运行（与 rollback / evidence 相同形态，不改 ExecutionPolicy）：
+
+```powershell
+$p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-complete.ps1"
+& ([scriptblock]::Create((Get-Content $p -Raw -Encoding UTF8))) -ScriptRoot (Split-Path $p -Parent)
+```
+
+仅复查 DeepSeek 残留、不写状态、不启动登录：
+
+```powershell
+$p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-complete.ps1"
+& ([scriptblock]::Create((Get-Content $p -Raw -Encoding UTF8))) -CheckOnly -ScriptRoot (Split-Path $p -Parent)
+```
+
+脚本严格按序执行，任一步失败即关闭且**不得登录 Anthropic**：
+
+| 步骤 | 含义 |
+|---|---|
+| 前置门禁 | 状态必须是 `VALIDATION_PASSED`（schema 1、platform windows） |
+| 残留检查 (b) | 当前进程、`Start-Process` 新起的干净 PowerShell、以及 User/Machine 级注册表环境三处，`windows-deepseek.ps1` 清单内 16 个环境变量均不存在（只报变量名，绝不打印值）；`%TEMP%` 无 `claude-lane-deepseek-*` 目录 |
+| 正常登录 (c) | 校验受控 `claude.exe` 固定路径、SHA-256、Authenticode 后，用不注入任何 DeepSeek/`ANTHROPIC_*`/`CLAUDE_*` 临时变量的新进程启动，**此时用户才登录 Anthropic**；等待该进程退出 |
+| 人工确认 (d) | 逐条 `Read-Host y/N`：活跃会话归属地与静态出口一致、已撤销不符旧会话、Privacy 两开关关闭、Windows 区域设置按 `docs/account-safety.md` 处理、知晓三条红线（不跑第二个 VPN / Clash 保持规则模式 / 先开 Clash 再开 Claude）。任一条非 `y` 即失败，不写完成状态 |
+| 完成 (e) | 全部通过后写入 `COMPLETED`，并输出 `PHASE6 COMPLETED: windows` |
+
+**残留检查失败时的处置**：不要带残留登录 Anthropic。先确认 DeepSeek 临时会话已退出并走完清理；必要时重启 PowerShell 或整机，再以 `-CheckOnly` 复查；`%TEMP%` 下若仍有 `claude-lane-deepseek-*` 目录可手动删除后重跑。禁止在残留未清时强行进入登录步骤。
