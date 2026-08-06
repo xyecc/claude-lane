@@ -50,4 +50,23 @@ $p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-rollback.ps1
 
 `windows-verify.ps1` 只输出通过/失败和打码出口，检查：Mihomo/TUN/规则模式、Claude/US-Chain 策略组、QUIC/进程/域名/遥测/IP 规则、Claude 与普通出口隔离、近期日志漏流、并行 Windows VPN。六项未全部通过，不启动 DeepSeek 会话，也不得宣布完成。
 
+## 非秘密审计证据（RC 可携带）
+
+六项验证通过后，在已安装的 lane 目录内生成 schema 2 证据（只读安装产物与已装 Clash；不读订阅、四元组、Key 或出口基线内容）：
+
+```powershell
+$p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-evidence.ps1"
+& ([scriptblock]::Create((Get-Content $p -Raw -Encoding UTF8))) -ScriptRoot (Split-Path $p -Parent)
+```
+
+输出文件（当前用户 ACL）：
+
+```text
+%LOCALAPPDATA%\claude-lane\audit\win32-x64.json
+# 或
+%LOCALAPPDATA%\claude-lane\audit\win32-arm64.json
+```
+
+**只把这一个 `audit\<platform>.json` 回传给发布方。** 证据落盘前会扫描 `sk-…` 与 IPv4/IPv6 模式；匹配则失败关闭且不写文件。
+
 当前实现仍必须在 Windows x64 与 ARM64 真机分别通过 PowerShell 语法、配置写入、回滚和出口实测，才能晋级 stable。

@@ -7,7 +7,7 @@
 - 不把 DeepSeek Key、机场订阅、静态 IP 四元组、完整 Clash 配置或真实出口 IP 写进结果文件、聊天或 Git。
 - macOS 严格按根目录 `RUNBOOK.md` 的 Phase -1～6 执行；命中 STOP 就停止并按 deployment id 回滚。
 - Windows 不使用执行策略绕过、不关闭系统安全。Claude Code 必须通过 Authenticode；Clash Verge Rev 必须通过固定 SHA-256、上游 Tauri minisign 与原生版本检查，并记录其 Authenticode 实际状态。
-- `.mirror-work/windows-audit/*.json` 是可以回收的非秘密证据；原始配置和日志不是。
+- RC 真机证据写在 `%LOCALAPPDATA%\claude-lane\audit\<platform>.json`（schema 2，当前用户 ACL）；只回传这一个文件。原始配置、日志和出口基线不是可回收证据。
 
 ## Apple Silicon Mac
 
@@ -92,12 +92,21 @@ VALIDATION PASSED: win32-x64
 VALIDATION PASSED: win32-arm64
 ```
 
-把对应非秘密审计文件复制回发布 Mac 的 `.mirror-work/windows-audit/`：
+六项验证全绿后，在 RC 安装环境运行审计证据入口（无 Git、无仓库、无 `.mirror-work`）：
+
+```powershell
+$p = "$env:LOCALAPPDATA\claude-lane\releases\v1.3.0\scripts\windows-evidence.ps1"
+& ([scriptblock]::Create((Get-Content $p -Raw -Encoding UTF8))) -ScriptRoot (Split-Path $p -Parent)
+```
+
+成功时输出 `VALIDATION PASSED: win32-x64` 或 `win32-arm64`，并写入：
 
 ```text
-win32-x64.json
-win32-arm64.json
+%LOCALAPPDATA%\claude-lane\audit\win32-x64.json
+%LOCALAPPDATA%\claude-lane\audit\win32-arm64.json
 ```
+
+**用户只把对应架构的单个 `audit\<platform>.json` 文件回传给发布 Mac**（不要回传配置、日志或 private-state）。发布侧也可运行 `scripts/windows-validation.ps1`，它复用同一 evidence 生成逻辑。
 
 Windows 真机还必须验证：四元组不回显、受保护备份可恢复、用户自有增强文件冲突时失败关闭、GUI 激活后六项验证均通过。任一项失败都不得生成 `VALIDATION PASSED` 审计证据。
 
@@ -107,8 +116,8 @@ Windows 真机还必须验证：四元组不回显、受保护备份可恢复、
 |---|---|
 | Apple Silicon Mac | RUNBOOK 六项全绿、DeepSeek 清理、正常 Claude 登录 |
 | Intel Mac | 原生 `claude-darwin-x64 --version` 与完整规定测试 |
-| Windows x64 | `windows-audit/win32-x64.json`，含 Authenticode 与 Bootstrap 自测 |
-| Windows ARM64 | `windows-audit/win32-arm64.json`，含 Authenticode 与 Bootstrap 自测 |
+| Windows x64 | `%LOCALAPPDATA%\claude-lane\audit\win32-x64.json`（schema 2：Authenticode、运行期自测、路由六项） |
+| Windows ARM64 | `%LOCALAPPDATA%\claude-lane\audit\win32-arm64.json`（schema 2：同上） |
 | 干净 Mac Bootstrap | 无预装依赖端到端成功，成功/失败/中断均无临时凭证残留 |
 | 国内分发 | 阿里云 OSS 主源公开对象上传、匿名回下载、同一 SHA-256 |
 

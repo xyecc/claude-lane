@@ -184,6 +184,20 @@ try {
     $ReleaseTarget = Join-Path $InstallRoot "releases\v$ExpectedLaneVersion"
     $KnownClash = @(@((Join-Path $env:LOCALAPPDATA "Programs\Clash Verge\Clash Verge.exe"), (Join-Path $env:ProgramFiles "Clash Verge\Clash Verge.exe")) | Where-Object { Test-Path -LiteralPath $_ })
     $StateFile = Join-Path $InstallRoot "setup-progress.json"
+    # Persist the already-validated manifest bytes for RC audit evidence (non-secret).
+    $CandidateStateDir = Join-Path $InstallRoot "state"
+    if (-not (Test-Path -LiteralPath $CandidateStateDir -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $CandidateStateDir | Out-Null
+    }
+    $CandidateManifestPath = Join-Path $CandidateStateDir "candidate-manifest.json"
+    $VerifiedManifestText = Get-Content -LiteralPath $ManifestFile -Raw -Encoding UTF8
+    $CandidateManifestTemp = Join-Path $CandidateStateDir (".candidate-manifest-" + [guid]::NewGuid().ToString("N") + ".json")
+    try {
+        [IO.File]::WriteAllText($CandidateManifestTemp, $VerifiedManifestText)
+        Move-Item -LiteralPath $CandidateManifestTemp -Destination $CandidateManifestPath -Force
+    } finally {
+        Remove-Item -LiteralPath $CandidateManifestTemp -Force -ErrorAction SilentlyContinue
+    }
     $ResumeReady = $false
     if ((Test-Path -LiteralPath $StateFile -PathType Leaf) -and (Test-Path -LiteralPath $ReleaseTarget -PathType Container) -and $KnownClash.Count -gt 0) {
         $SavedState = Get-Content -LiteralPath $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json

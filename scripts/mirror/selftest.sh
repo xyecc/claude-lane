@@ -93,6 +93,13 @@ else
   bad "lane 归档使用运行时白名单并规避清单哈希循环"
 fi
 
+if /usr/bin/grep -Fq 'scripts/windows-evidence.ps1' "$SCRIPT_DIR/build-lane.sh" &&
+   /usr/bin/grep -Fq 'scripts/windows-runtime-selftest.ps1' "$SCRIPT_DIR/build-lane.sh"; then
+  ok "lane 白名单包含 Windows 审计证据与运行期自测脚本"
+else
+  bad "lane 白名单包含 Windows 审计证据与运行期自测脚本"
+fi
+
 if /bin/bash -n "$SCRIPT_DIR/build-windows-validation-bundle.sh" &&
    /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" 2>&1 | /usr/bin/grep -Fq 'retired' &&
    ! /bin/bash "$SCRIPT_DIR/build-windows-validation-bundle.sh" --execute >/dev/null 2>&1; then
