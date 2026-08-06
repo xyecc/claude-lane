@@ -17,14 +17,14 @@ EOF
 
 valid_state() {
   case "$1" in
-    CLASH_INSTALLED|WAITING_FOR_SUBSCRIPTION|SUBSCRIPTION_IMPORTED|PROXY_REACHABLE|AIRPORT_VERIFIED|WAITING_FOR_ISP|ROUTING_CONFIGURED|VALIDATION_PASSED|COMPLETED) return 0 ;;
+    CLASH_INSTALLED|WAITING_FOR_SUBSCRIPTION|SUBSCRIPTION_IMPORTED|PROXY_REACHABLE|AIRPORT_VERIFIED|WAITING_FOR_ENHANCEMENT_FILES|WAITING_FOR_ISP|WAITING_FOR_ACTIVATION|ROUTING_CONFIGURED|VALIDATION_PASSED|COMPLETED) return 0 ;;
   esac
   return 1
 }
 
 valid_reason() {
   case "$1" in
-    clash_installed|profiles_missing|subscription_not_imported|subscription_imported|proxy_reachable|airport_verified|isp_required|routing_configured|validation_passed|completed) return 0 ;;
+    clash_installed|profiles_missing|subscription_not_imported|subscription_imported|proxy_reachable|airport_verified|enhancement_files_missing|isp_required|activation_required|routing_configured|validation_passed|completed) return 0 ;;
   esac
   return 1
 }

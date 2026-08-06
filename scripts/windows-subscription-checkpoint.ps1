@@ -22,8 +22,13 @@ $Profiles = Join-Path $ConfigRoot "profiles.yaml"
 
 function Set-Progress([string]$State, [string]$Reason) {
     if (-not (Test-Path -LiteralPath $StateTool -PathType Leaf)) { throw "安装包缺少进度状态工具" }
-    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateTool -Raw))
+    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateTool -Raw -Encoding UTF8))
     & $StateBlock -Set $State -Reason $Reason | Out-Null
+}
+function Get-Progress {
+    if (-not (Test-Path -LiteralPath $StateTool -PathType Leaf)) { return "NOT_STARTED" }
+    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateTool -Raw -Encoding UTF8))
+    return [string](@(& $StateBlock -Get) | Select-Object -Last 1)
 }
 
 if (-not (Test-Path -LiteralPath $Profiles -PathType Leaf)) {
@@ -35,7 +40,7 @@ if (-not (Test-Path -LiteralPath $Profiles -PathType Leaf)) {
 
 # Clash Verge 的 profiles.yaml 不是通用 YAML API。这里只接受它写出的窄格式：
 # 唯一 current、唯一同 uid 条目、type: remote，以及该条目内非空 url。
-$Lines = @(Get-Content -LiteralPath $Profiles)
+$Lines = @(Get-Content -LiteralPath $Profiles -Encoding UTF8)
 $CurrentFields = @()
 for ($Index = 0; $Index -lt $Lines.Count; $Index++) {
     if ($Lines[$Index] -match '^current:\s*(.*?)\s*$') {
@@ -86,7 +91,9 @@ for ($Index = $Start + 1; $Index -lt $End; $Index++) {
 if ($TypeCount -ne 1 -or $UrlCount -gt 1) { throw "当前 profile 的 type/url 格式重复或不受支持" }
 
 if ($Type -eq "remote" -and $HasUrl) {
-    Set-Progress "SUBSCRIPTION_IMPORTED" "subscription_imported"
+    $ExistingState = Get-Progress
+    $LaterStates = @("PROXY_REACHABLE", "AIRPORT_VERIFIED", "WAITING_FOR_ENHANCEMENT_FILES", "WAITING_FOR_ISP", "WAITING_FOR_ACTIVATION", "ROUTING_CONFIGURED", "VALIDATION_PASSED", "COMPLETED")
+    if ($LaterStates -notcontains $ExistingState) { Set-Progress "SUBSCRIPTION_IMPORTED" "subscription_imported" }
     Write-Output "SETUP_STATE=SUBSCRIPTION_IMPORTED"
     Write-Output "NEXT_ACTION=CONTINUE_PREFLIGHT"
 } else {

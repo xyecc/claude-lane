@@ -36,12 +36,25 @@ $SelfTestOutput = (& powershell.exe -NoProfile -File $SelfTestScript 2>&1 | Out-
 if ($LASTEXITCODE -ne 0) { throw "Bootstrap self-test failed:`n$SelfTestOutput" }
 Write-Output $SelfTestOutput
 
+$SetupStatePath = Join-Path $env:LOCALAPPDATA "claude-lane\setup-progress.json"
+$ExitBaselinePath = Join-Path $env:LOCALAPPDATA "claude-lane\private-state\windows-exit-baseline.json"
+if (-not (Test-Path -LiteralPath $SetupStatePath -PathType Leaf)) { throw "Windows routing validation state is missing" }
+$SetupState = Get-Content -LiteralPath $SetupStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+if ([int]$SetupState.schema -ne 1 -or [string]$SetupState.state -ne "VALIDATION_PASSED" -or [string]$SetupState.platform -ne "windows") { throw "Windows routing six-check validation has not passed" }
+if (-not (Test-Path -LiteralPath $ExitBaselinePath -PathType Leaf)) { throw "Windows routing exit baseline is missing" }
+
 $EvidencePath = Join-Path $WorkDir "windows-audit\$Platform.json"
 if (-not (Test-Path -LiteralPath $EvidencePath -PathType Leaf)) { throw "Validation evidence was not created: $EvidencePath" }
-$Evidence = Get-Content -LiteralPath $EvidencePath -Raw | ConvertFrom-Json
+$Evidence = Get-Content -LiteralPath $EvidencePath -Raw -Encoding UTF8 | ConvertFrom-Json
 $Evidence | Add-Member -NotePropertyName bootstrap_selftest -NotePropertyValue ([ordered]@{
     passed = $true
     summary = ($SelfTestOutput -split "`r?`n" | Select-Object -Last 1)
+}) -Force
+$Evidence | Add-Member -NotePropertyName routing_validation -NotePropertyValue ([ordered]@{
+    passed = $true
+    state = "VALIDATION_PASSED"
+    six_checks = 6
+    private_baseline_present = $true
 }) -Force
 $Evidence | Add-Member -NotePropertyName host -NotePropertyValue ([ordered]@{
     os_version = [Environment]::OSVersion.VersionString

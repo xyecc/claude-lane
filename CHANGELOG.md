@@ -13,7 +13,8 @@
 - 新增可暂停、可恢复的安装状态机和订阅检查点：Clash Verge 安装后若没有远程订阅，保存 `WAITING_FOR_SUBSCRIPTION` 并正常结束；重新运行后校验现有组件并续跑，订阅通过前不读取 DeepSeek Key、不启动 Agent
 - 安装顺序调整为“国内源安装 Clash → 等待订阅 → 代理可用后从 Anthropic 官方源安装固定版 Claude Code”；不公开镜像 Claude Code，也不再生成 239MB Windows 搬运包
 - macOS 与 Windows 状态文件只保存固定枚举和原因码；订阅 URL 仍只允许在 Clash Verge GUI 本地输入，不进入状态、日志或模型上下文
-- 新增 Windows 10 1809+ 的 `bootstrap.ps1`，覆盖 x64 / ARM64 原生 Claude Code 与 Clash Verge Rev 正式安装器；强制固定版本、主备国内源、SHA-256、Authenticode、版本检查和不覆盖现有安装，且不扩张 macOS 专线路由阶段
+- 新增 Windows 10 1809+ 的 `bootstrap.ps1`，覆盖 x64 / ARM64 原生 Claude Code 与 Clash Verge Rev 正式安装器；强制固定版本、主备国内源、SHA-256、Authenticode、版本检查和不覆盖现有安装
+- Windows 增加 `WAITING_FOR_ENHANCEMENT_FILES`、`WAITING_FOR_ISP`、`WAITING_FOR_ACTIVATION` 固定暂停点，以及本地隐藏输入 ISP、四类增强配置原子写入、当前用户 ACL 备份、按 deployment id 回滚和六项验证；双架构真机证据齐全前保持候选状态
 - 镜像矩阵固定为 Claude Code `2.1.220` 与 Clash Verge Rev `2.5.2`；新增 Windows 双架构摘要、Tauri `.sig`、GPL 许可证和官方源码元数据。Windows 真机 Authenticode 仍是 stable 阻断项
 - 新增 `scripts/mirror/` 发布工具：默认 dry-run 的官方抓取、GPG / codesign / Gatekeeper / minisign 验证、候选清单生成、OSS 不覆盖上传和显式 stable 晋级
 - 新增 `scripts/bootstrap-windows-selftest.ps1` 与 `scripts/mirror/selftest.sh`；macOS 启动器也会验证 Windows 双架构字段和签名证据，防止发布不完整矩阵
@@ -36,7 +37,7 @@
 
 - 新增 `scripts/macos-json.js`，使用 macOS 自带 JXA 处理 JSON、YAML 标量转义、profiles 定位和状态基线
 - `set-credentials.sh` 与 `verify.sh` 不再依赖 Python 3；静态四元组通过 stdin 传给辅助程序，不进入命令参数或环境变量
-- `selftest.sh` 当前 80/80 通过；`bootstrap-selftest.sh` 当前覆盖 49 项，`mirror/selftest.sh` 覆盖 17 项，包括严格 profiles 解析、订阅检查点、非秘密状态持久化、发布门禁、Bash 3.2、Key argv 隔离、Claude codesign 身份、settings/MCP 隔离、权限确认、子进程环境剥离、归档逃逸、原子安装、包内容门禁、干净正常登录、Phase 6 双重完成判据和 Windows 验证包默认失败关闭
+- `selftest.sh` 当前 82/82 通过；`bootstrap-selftest.sh` 当前覆盖 51 项，`mirror/selftest.sh` 覆盖 24 项，包括严格 profiles 解析、订阅检查点、非秘密状态持久化、发布门禁、Bash 3.2、Key argv 隔离、Claude codesign 身份、settings/MCP 隔离、权限确认、子进程环境剥离、归档逃逸、原子安装、包内容门禁、干净正常登录、Phase 6 双重完成判据和 Windows 验证包默认失败关闭
 
 ## v1.2.1 — 2026-07-26
 

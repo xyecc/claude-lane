@@ -49,7 +49,8 @@ git archive --format=tar --mtime='1970-01-01T00:00:00Z' \
   scripts/backup.sh scripts/bootstrap-complete.sh scripts/macos-json.js \
   scripts/profile-config.sh scripts/rollback.sh scripts/selftest.sh \
   scripts/set-credentials.sh scripts/setup-state.sh scripts/setup-state.ps1 \
-  scripts/subscription-checkpoint.sh scripts/windows-subscription-checkpoint.ps1 scripts/windows-deepseek.ps1 \
+  scripts/subscription-checkpoint.sh scripts/windows-subscription-checkpoint.ps1 scripts/windows-routing.ps1 \
+  scripts/windows-verify.ps1 scripts/windows-rollback.ps1 scripts/windows-deepseek.ps1 \
   scripts/verify.sh templates |
   /usr/bin/gzip -n >"$DEST/claude-lane.tar.gz" || mirror_die "cannot build lane tarball"
 git archive --format=zip --mtime='1970-01-01T00:00:00Z' \
@@ -60,7 +61,8 @@ git archive --format=zip --mtime='1970-01-01T00:00:00Z' \
   scripts/backup.sh scripts/bootstrap-complete.sh scripts/macos-json.js \
   scripts/profile-config.sh scripts/rollback.sh scripts/selftest.sh \
   scripts/set-credentials.sh scripts/setup-state.sh scripts/setup-state.ps1 \
-  scripts/subscription-checkpoint.sh scripts/windows-subscription-checkpoint.ps1 scripts/windows-deepseek.ps1 \
+  scripts/subscription-checkpoint.sh scripts/windows-subscription-checkpoint.ps1 scripts/windows-routing.ps1 \
+  scripts/windows-verify.ps1 scripts/windows-rollback.ps1 scripts/windows-deepseek.ps1 \
   scripts/verify.sh templates || mirror_die "cannot build lane zip"
 printf 'commit=%s\ntree=%s\ntar_sha256=%s\nzip_sha256=%s\n' \
   "$(git rev-parse HEAD)" "$HEAD_TREE" "$(mirror_sha256 "$DEST/claude-lane.tar.gz")" \

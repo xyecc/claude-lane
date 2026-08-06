@@ -1,6 +1,6 @@
 # Claude 专线：只让 Claude 走美国静态住宅 IP
 
-**v1.3.0** · 专线路由仅支持 macOS；镜像启动链覆盖 macOS / Windows x64 / ARM64 · 版本以 [`VERSION`](VERSION) 为准 · [更新日志](CHANGELOG.md)
+**v1.3.0** · macOS 专线路由已实现；Windows 专线路由进入候选验收 · 镜像启动链覆盖 macOS / Windows x64 / ARM64 · 版本以 [`VERSION`](VERSION) 为准 · [更新日志](CHANGELOG.md)
 
 让 macOS 上的 Claude 网页版、桌面版和 Claude Code 固定走一个美国静态住宅 IP；其他流量继续使用机场订阅原有规则。
 
@@ -21,7 +21,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 - 启动器遇到示例域名、`TBD`、空值或非 64 位 SHA-256 时会在修改系统前安全停止；
 - 目前没有可公开复制的 stable 国内安装命令；
 - lane 归档、Windows 双架构真机、Intel Mac 和无代理干净 Mac 端到端验收尚未全部完成；
-- 不再生成含大体积制品的 Windows 搬运验证包；Windows 使用同一 OSS 启动链，专线路由仍需按移植文档处理；
+- 不再生成含大体积制品的 Windows 搬运验证包；Windows 使用同一 OSS 启动链，本地路由配置、备份、回滚和六项验证已经实现但仍待双架构真机验收；
 - 不要删掉校验或临时换第三方镜像来绕过门禁。
 
 分发清单、签名、对象存储和发布门禁见 [`docs/bootstrap.md`](docs/bootstrap.md)。当前可先审阅 [`RUNBOOK.md`](RUNBOOK.md)，或在已有 Clash Verge 环境上使用 [`docs/manual-setup.md`](docs/manual-setup.md)。
@@ -31,7 +31,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 | 平台 | 分流方案 | 本仓库自动化 |
 |---|---|---|
 | macOS（Apple Silicon / Intel） | 支持 | 完整 RUNBOOK 目标平台；stable 待发布 |
-| Windows（ARM64 / x64） | 原理可移植 | 固定版镜像下载、SHA-256、Authenticode 与安装链已实现；专线路由仍参考 [`docs/porting.md`](docs/porting.md) |
+| Windows（ARM64 / x64） | 候选实现 | 固定版镜像下载、验签、检查点、路由配置、回滚与六项验证已实现；等待双架构真机验收 |
 | iPhone / iOS | 可用其他客户端实现 | 不支持，见 [`docs/iphone-notes.md`](docs/iphone-notes.md) |
 | Linux | 未验证 | 不支持 |
 
@@ -165,6 +165,8 @@ bash scripts/rollback.sh <deployment-id>
 | `scripts/windows-validation.ps1` | Windows 真机验签、自测与非秘密审计证据入口 |
 | `scripts/windows-local-rc.ps1` | 已退役的 Windows 搬运 RC 兼容入口；失败关闭 |
 | `scripts/windows-deepseek.ps1` | Windows 本地隐藏读取 Key、握手并启动隔离 DeepSeek Claude 会话 |
+| `scripts/windows-routing.ps1` | Windows 本地隐藏输入 ISP、写入四类增强配置并建立安全备份 |
+| `scripts/windows-verify.ps1` / `windows-rollback.ps1` | Windows 六项验证与按 deployment id 回滚 |
 | `scripts/mirror/build-windows-validation-bundle.sh` | 已退役的兼容入口；拒绝生成大体积搬运包 |
 | `scripts/mirror/` | macOS 发布机镜像抓取、验证、清单、OSS 上传和人工晋级工具 |
 | `scripts/bootstrap-complete.sh` | Phase 6 非秘密完成标记；仍需父启动器独立六项复验 |

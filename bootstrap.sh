@@ -590,6 +590,8 @@ stage_domestic_artifacts() {
     scripts/backup.sh scripts/rollback.sh scripts/selftest.sh scripts/verify.sh \
     scripts/set-credentials.sh scripts/profile-config.sh scripts/macos-json.js \
     scripts/bootstrap-complete.sh scripts/setup-state.sh scripts/subscription-checkpoint.sh \
+    scripts/setup-state.ps1 scripts/windows-subscription-checkpoint.ps1 scripts/windows-routing.ps1 \
+    scripts/windows-verify.ps1 scripts/windows-rollback.ps1 scripts/windows-deepseek.ps1 \
     templates/1-proxies.yaml templates/2-groups.yaml \
     templates/3-rules.yaml templates/4-merge.yaml templates/optional-payment-rules.yaml \
     docs/troubleshooting.md docs/account-safety.md docs/porting.md; do

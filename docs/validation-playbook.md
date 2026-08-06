@@ -53,7 +53,7 @@ Invoke-WebRequest "$base/evidence.txt" -OutFile "$env:TEMP\claude-lane-evidence.
 $expected = ((Select-String '^install_ps1_sha256=' "$env:TEMP\claude-lane-evidence.txt").Line -split '=', 2)[1]
 $actual = (Get-FileHash "$env:TEMP\claude-lane-rc.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "RC 启动器 SHA-256 不匹配" }
-& ([scriptblock]::Create((Get-Content "$env:TEMP\claude-lane-rc.ps1" -Raw)))
+& ([scriptblock]::Create((Get-Content "$env:TEMP\claude-lane-rc.ps1" -Raw -Encoding UTF8)))
 ```
 
 先将哈希与 evidence 中的 `install_ps1_sha256` 对照。不得使用 `ExecutionPolicy Bypass`、`Unblock-File` 或关闭 SmartScreen。stable 发布后，用户入口才是：
@@ -64,7 +64,7 @@ irm https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com
 
 最终命令目前仅表示固定路径，`manifests/stable.json` 仍为 `blocked` 时不得执行。候选验证必须确认：系统临时目录下载、架构自动识别、Clash 固定 SHA-256、上游 Tauri minisign、运行时 Authenticode、安装成功和订阅检查点全部成立。
 
-没有订阅时保存 `WAITING_FOR_SUBSCRIPTION` 并正常结束；用户在 Clash Verge GUI 本地导入后，重新运行同一命令。代理通过后才允许从 Anthropic 官方固定版 URL 下载 Claude Code，并强制核对 SHA-256、Authenticode 和版本。随后才隐藏读取 DeepSeek API Key、完成文本握手并进入临时 Claude Code 会话。它不自动修改 Windows 专线路由。
+没有订阅时保存 `WAITING_FOR_SUBSCRIPTION` 并正常结束；用户在 Clash Verge GUI 本地导入后，重新运行同一命令。代理通过后才允许从 Anthropic 官方固定版 URL 下载 Claude Code，并强制核对 SHA-256、Authenticode 和版本。随后按 `WAITING_FOR_ENHANCEMENT_FILES`、`WAITING_FOR_ISP`、`WAITING_FOR_ACTIVATION` 三个固定卡点完成本地路由；六项验证全绿后才隐藏读取 DeepSeek API Key、完成文本握手并进入临时 Claude Code 会话。
 
 等待订阅的成功暂停标志：
 
@@ -99,7 +99,7 @@ win32-x64.json
 win32-arm64.json
 ```
 
-Windows 专线路由当前仍按 `docs/porting.md` 人工处理。
+Windows 真机还必须验证：四元组不回显、受保护备份可恢复、用户自有增强文件冲突时失败关闭、GUI 激活后六项验证均通过。任一项失败都不得生成 `VALIDATION PASSED` 审计证据。
 
 ## 验收矩阵
 

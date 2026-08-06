@@ -7,6 +7,9 @@ $DeepSeekLauncher = Join-Path $RepoRoot "scripts\windows-deepseek.ps1"
 $LocalRc = Join-Path $RepoRoot "scripts\windows-local-rc.ps1"
 $StateTool = Join-Path $RepoRoot "scripts\setup-state.ps1"
 $SubscriptionCheckpoint = Join-Path $RepoRoot "scripts\windows-subscription-checkpoint.ps1"
+$RoutingTool = Join-Path $RepoRoot "scripts\windows-routing.ps1"
+$RoutingVerifier = Join-Path $RepoRoot "scripts\windows-verify.ps1"
+$RoutingRollback = Join-Path $RepoRoot "scripts\windows-rollback.ps1"
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-windows-selftest-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $TempRoot | Out-Null
 $Passed = 0
@@ -45,6 +48,9 @@ try {
     Test-PowerShellSyntax "Windows 旧 RC 兼容入口语法" $LocalRc
     Test-PowerShellSyntax "Windows 进度状态工具语法" $StateTool
     Test-PowerShellSyntax "Windows 订阅检查点语法" $SubscriptionCheckpoint
+    Test-PowerShellSyntax "Windows 专线路由配置语法" $RoutingTool
+    Test-PowerShellSyntax "Windows 专线路由六项验证语法" $RoutingVerifier
+    Test-PowerShellSyntax "Windows 专线路由回滚语法" $RoutingRollback
     $CheckpointConfig = Join-Path $TempRoot "checkpoint-config"
     $CheckpointState = Join-Path $TempRoot "checkpoint-state"
     New-Item -ItemType Directory -Path $CheckpointConfig | Out-Null
@@ -64,7 +70,42 @@ try {
         if ($null -eq $OldConfigRoot) { Remove-Item Env:CLAUDE_LANE_CLASH_CFG -ErrorAction SilentlyContinue } else { $env:CLAUDE_LANE_CLASH_CFG = $OldConfigRoot }
         if ($null -eq $OldStateRoot) { Remove-Item Env:CLAUDE_LANE_SETUP_ROOT -ErrorAction SilentlyContinue } else { $env:CLAUDE_LANE_SETUP_ROOT = $OldStateRoot }
     }
-    $BootstrapText = Get-Content -LiteralPath $Bootstrap -Raw
+    $RoutingConfig = Join-Path $TempRoot "routing-config"
+    $RoutingState = Join-Path $TempRoot "routing-state"
+    New-Item -ItemType Directory -Path $RoutingConfig | Out-Null
+    @"
+current: SUB000000001
+items:
+- uid: SUB000000001
+  type: remote
+  name: Test.yaml
+  file: SUB000000001.yaml
+  url: https://example.invalid/sub
+  option:
+"@ | Set-Content -LiteralPath (Join-Path $RoutingConfig "profiles.yaml") -Encoding UTF8
+    $OldConfigRoot = $env:CLAUDE_LANE_CLASH_CFG
+    $OldStateRoot = $env:CLAUDE_LANE_SETUP_ROOT
+    try {
+        $env:CLAUDE_LANE_CLASH_CFG = $RoutingConfig
+        $env:CLAUDE_LANE_SETUP_ROOT = $RoutingState
+        $RoutingResult = (& powershell.exe -NoProfile -File $RoutingTool -ScriptRoot (Join-Path $RepoRoot "scripts") 2>&1 | Out-String)
+        if ($LASTEXITCODE -eq 0 -and $RoutingResult -match 'SETUP_STATE=WAITING_FOR_ENHANCEMENT_FILES' -and $RoutingResult -notmatch 'example\.invalid') {
+            Pass "Windows 缺增强文件时安全暂停且不泄漏订阅"
+        } else {
+            Fail "Windows 缺增强文件时安全暂停且不泄漏订阅" $RoutingResult.Trim()
+        }
+        $CheckpointResult = (& powershell.exe -NoProfile -File $SubscriptionCheckpoint -ScriptRoot (Join-Path $RepoRoot "scripts") 2>&1 | Out-String)
+        $SavedRoutingState = Get-Content -LiteralPath (Join-Path $RoutingState "setup-progress.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($LASTEXITCODE -eq 0 -and $CheckpointResult -match 'SETUP_STATE=SUBSCRIPTION_IMPORTED' -and [string]$SavedRoutingState.state -eq "WAITING_FOR_ENHANCEMENT_FILES") {
+            Pass "Windows 重验订阅时不降级后续恢复点"
+        } else {
+            Fail "Windows 重验订阅时不降级后续恢复点" $CheckpointResult.Trim()
+        }
+    } finally {
+        if ($null -eq $OldConfigRoot) { Remove-Item Env:CLAUDE_LANE_CLASH_CFG -ErrorAction SilentlyContinue } else { $env:CLAUDE_LANE_CLASH_CFG = $OldConfigRoot }
+        if ($null -eq $OldStateRoot) { Remove-Item Env:CLAUDE_LANE_SETUP_ROOT -ErrorAction SilentlyContinue } else { $env:CLAUDE_LANE_SETUP_ROOT = $OldStateRoot }
+    }
+    $BootstrapText = Get-Content -LiteralPath $Bootstrap -Raw -Encoding UTF8
     $CheckpointPosition = $BootstrapText.IndexOf('$CheckpointOutput = @(& $CheckpointBlock')
     $ProxyVerificationPosition = $BootstrapText.IndexOf('$ReleaseManifestUrl = "$ClaudeOfficialBaseUrl/$ExpectedClaudeVersion/manifest.json"')
     $OfficialDownloadPosition = $BootstrapText.IndexOf('Invoke-Download $OfficialClaudeUrl $ClaudeDownload')
@@ -80,19 +121,38 @@ try {
         Fail "Windows 代理检查使用固定官方元数据摘要并保存恢复点" "代理实测固定值或恢复点缺失"
     }
     if ($BootstrapText -notmatch 'Unblock-File|ExecutionPolicy' -and
-        $BootstrapText -match '\[scriptblock\]::Create\(\(Get-Content -LiteralPath \$CheckpointScript -Raw\)\)' -and
-        (Get-Content -LiteralPath $StateTool -Raw) -notmatch 'exit\s+0' -and
-        (Get-Content -LiteralPath $SubscriptionCheckpoint -Raw) -notmatch 'exit\s+0') {
+        $BootstrapText -match '\[scriptblock\]::Create\(\(Get-Content -LiteralPath \$CheckpointScript -Raw -Encoding UTF8\)\)' -and
+        (Get-Content -LiteralPath $StateTool -Raw -Encoding UTF8) -notmatch 'exit\s+0' -and
+        (Get-Content -LiteralPath $SubscriptionCheckpoint -Raw -Encoding UTF8) -notmatch 'exit\s+0') {
         Pass "Windows 不改执行策略且在已校验归档内存执行"
     } else {
         Fail "Windows 不改执行策略且在已校验归档内存执行" "仍存在解除阻止或文件执行入口"
+    }
+    $RoutingText = Get-Content -LiteralPath $RoutingTool -Raw -Encoding UTF8
+    $VerifyText = Get-Content -LiteralPath $RoutingVerifier -Raw -Encoding UTF8
+    if ($RoutingText -match 'Read-Host\s+\$Prompt\s+-AsSecureString' -and
+        $RoutingText -match 'Read-Secret\s+"静态 IP 密码（隐藏输入）"' -and
+        $RoutingText -match 'ZeroFreeBSTR' -and $RoutingText -match 'SetAccessRuleProtection\(\$true, \$false\)' -and
+        $RoutingText -notmatch 'Write-Output.*PasswordValue' -and
+        $VerifyText -match 'VALIDATION PASSED: windows-routing' -and $VerifyText -match '\$Passed -eq 6') {
+        Pass "Windows ISP 隐藏输入、受保护备份与六项门禁"
+    } else {
+        Fail "Windows ISP 隐藏输入、受保护备份与六项门禁" "路由脚本安全静态门禁未满足"
+    }
+    $AllPassedPosition = $VerifyText.IndexOf('if ($Failed -eq 0 -and $Passed -eq 6)')
+    $BaselineWritePosition = $VerifyText.IndexOf('[IO.File]::WriteAllText($BaselineTemp')
+    if ($AllPassedPosition -ge 0 -and $BaselineWritePosition -gt $AllPassedPosition -and
+        $VerifyText -match '本地基线缺失' -and $VerifyText -match 'Set-Progress ROUTING_CONFIGURED routing_configured') {
+        Pass "Windows 出口基线仅在六项全绿后保存且失败撤销通过状态"
+    } else {
+        Fail "Windows 出口基线仅在六项全绿后保存且失败撤销通过状态" "基线写入或失败状态门禁不安全"
     }
     if ($BootstrapText -match 'Assert-DirectoryTree' -and $BootstrapText -match '不重复下载 Clash 安装包' -and $BootstrapText -match 'WAITING_FOR_SUBSCRIPTION.*SUBSCRIPTION_IMPORTED') {
         Pass "Windows 续跑重验 lane 且不重复下载 Clash 安装包"
     } else {
         Fail "Windows 续跑重验 lane 且不重复下载 Clash 安装包" "恢复状态机静态门禁未满足"
     }
-    $DeepSeekText = Get-Content -LiteralPath $DeepSeekLauncher -Raw
+    $DeepSeekText = Get-Content -LiteralPath $DeepSeekLauncher -Raw -Encoding UTF8
     if ($DeepSeekText -match 'Read-Host\s+"DeepSeek API Key"\s+-AsSecureString' -and
         $DeepSeekText -match 'SecureStringToBSTR' -and $DeepSeekText -match 'ZeroFreeBSTR' -and
         $DeepSeekText -match 'EnvironmentVariables\["ANTHROPIC_AUTH_TOKEN"\]' -and
@@ -110,7 +170,7 @@ try {
     } else {
         Fail "DeepSeek 临时会话隔离工具并清理配置" "工具或清理静态门禁未满足"
     }
-    $LocalRcText = Get-Content -LiteralPath $LocalRc -Raw
+    $LocalRcText = Get-Content -LiteralPath $LocalRc -Raw -Encoding UTF8
     if ($LocalRcText -match 'is retired' -and $LocalRcText -match 'fixed OSS bootstrap\.ps1 entry') {
         Pass "旧 Windows 搬运 RC 已退役"
     } else {

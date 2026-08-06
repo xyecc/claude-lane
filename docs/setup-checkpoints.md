@@ -11,7 +11,9 @@ NOT_STARTED
   → SUBSCRIPTION_IMPORTED
   → PROXY_REACHABLE
   → AIRPORT_VERIFIED
+  → WAITING_FOR_ENHANCEMENT_FILES
   → WAITING_FOR_ISP
+  → WAITING_FOR_ACTIVATION
   → ROUTING_CONFIGURED
   → VALIDATION_PASSED
   → COMPLETED
@@ -68,6 +70,8 @@ Agent 不负责购买机场，也不能在没有基础代理时反过来配置�
 - 没有 `profiles.yaml`：`WAITING_FOR_SUBSCRIPTION`。
 - 当前 profile 不是远程订阅或 URL 为空：`WAITING_FOR_SUBSCRIPTION`。
 - 订阅存在但 Anthropic 固定元数据不可达：保持 `SUBSCRIPTION_IMPORTED`，提示选择可用美国节点并开启 TUN 或系统代理，然后重跑同一入口。
+- Windows 当前订阅没有四类增强 uid：`WAITING_FOR_ENHANCEMENT_FILES`，由用户在 Clash GUI 原样保存对应编辑器后重跑。
+- Windows 路由文件已写入但尚未重新合并：`WAITING_FOR_ACTIVATION`，点击当前订阅卡片并确认 TUN/规则模式后重跑。
 - `profiles.yaml` 结构歧义、重复 `current` 或文件类型异常：失败关闭，不当成“尚未导入”。
 - 订阅已导入但拉取失败、没有美国节点或基础网络不通：停在机场验证阶段，不进入 ISP 配置。
 - 任一秘密只能由用户在本机输入；远程协助者只看固定状态和打码结果。

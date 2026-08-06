@@ -23,9 +23,9 @@ macOS bootstrap 负责可确定、可验证的完整启动步骤：
 
 Agent 不决定下载版本或来源，也不临时搜索镜像。启动阶段不依赖 Git、Homebrew、Node.js、Python 3 或 `jq`，只使用 macOS 自带组件。
 
-Windows `bootstrap.ps1` 支持 Windows 10 1809+ 的 x64 / ARM64，只负责固定清单下载、主备切换、SHA-256、签名策略、版本校验、不覆盖现有安装，以及订阅检查点。Claude Code 强制 Authenticode；Clash Verge Rev 强制上游 Tauri minisign、固定 SHA-256，并在真机记录 Authenticode 实际状态。没有订阅时保存 `WAITING_FOR_SUBSCRIPTION` 后正常结束；有订阅后先以已验签、固定摘要的小型 Anthropic 元数据实测代理，成功才保存 `PROXY_REACHABLE` 并下载 Claude Code。它不扩张 macOS 专线 `RUNBOOK.md` 的 Phase -1～6；Windows 分流仍按 `docs/porting.md` 人工处理。启动期间设置 `DISABLE_UPDATES=1` 与 `DISABLE_AUTOUPDATER=1`，不使用执行策略绕过或关闭系统安全。
+Windows `bootstrap.ps1` 支持 Windows 10 1809+ 的 x64 / ARM64，覆盖固定清单下载、主备切换、SHA-256、签名策略、版本校验、不覆盖现有安装，以及多个人工检查点。Claude Code 强制 Authenticode；Clash Verge Rev 强制上游 Tauri minisign、固定 SHA-256，并在真机记录 Authenticode 实际状态。没有订阅时保存 `WAITING_FOR_SUBSCRIPTION` 后正常结束；有订阅后先以已验签、固定摘要的小型 Anthropic 元数据实测代理。Windows 路由由本地 PowerShell 确定性写入，ISP 四元组隐藏输入，配置带受保护备份、回滚与六项验证；全部通过后才启动 DeepSeek 会话。启动期间设置 `DISABLE_UPDATES=1` 与 `DISABLE_AUTOUPDATER=1`，不使用执行策略绕过或关闭系统安全。
 
-Windows 不再使用含大体积安装包的搬运验证包。正式候选直接走同一条 OSS 启动链：国内下载 Clash 与 lane，订阅检查点后再从 Anthropic 官方地址取得 Claude Code，并调用 `windows-deepseek.ps1` 启动隔离会话。该链路不代表 Windows 专线路由已经自动化。
+Windows 不再使用含大体积安装包的搬运验证包。正式候选直接走同一条 OSS 启动链：国内下载 Clash 与 lane，订阅检查点后再从 Anthropic 官方地址取得 Claude Code，经过路由配置与六项验证后调用 `windows-deepseek.ps1` 启动隔离会话。该链路在 x64 / ARM64 真机证据齐全前仍属于候选实现。
 
 ## Manifest 语义
 

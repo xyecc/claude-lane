@@ -156,7 +156,7 @@ try {
         Get-CheckedArtifact $StableManifestPath $StableManifestSha256 $ManifestFile "$ReleaseChannel manifest"
     }
     $ManifestFile = (Resolve-Path -LiteralPath $ManifestFile).Path
-    $Manifest = Get-Content -LiteralPath $ManifestFile -Raw | ConvertFrom-Json
+    $Manifest = Get-Content -LiteralPath $ManifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
     if ([int]$Manifest.schema -ne $ExpectedSchema) { Stop-Bootstrap "不支持的 manifest schema" }
     if ([string]$Manifest.release_status -ne $ExpectedReleaseStatus) { Stop-Bootstrap "manifest 尚未达到 $ExpectedReleaseStatus 状态" }
@@ -186,11 +186,11 @@ try {
     $StateFile = Join-Path $InstallRoot "setup-progress.json"
     $ResumeReady = $false
     if ((Test-Path -LiteralPath $StateFile -PathType Leaf) -and (Test-Path -LiteralPath $ReleaseTarget -PathType Container) -and $KnownClash.Count -gt 0) {
-        $SavedState = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+        $SavedState = Get-Content -LiteralPath $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json
         if ([int]$SavedState.schema -ne 1) { Stop-Bootstrap "安装进度文件 schema 无效" }
-        if (@("WAITING_FOR_SUBSCRIPTION", "SUBSCRIPTION_IMPORTED", "PROXY_REACHABLE") -contains [string]$SavedState.state) {
+        if (@("WAITING_FOR_SUBSCRIPTION", "SUBSCRIPTION_IMPORTED", "PROXY_REACHABLE", "WAITING_FOR_ENHANCEMENT_FILES", "WAITING_FOR_ISP", "WAITING_FOR_ACTIVATION", "ROUTING_CONFIGURED", "VALIDATION_PASSED") -contains [string]$SavedState.state) {
             $InstalledVersion = Join-Path $ReleaseTarget "VERSION"
-            if (-not (Test-Path -LiteralPath $InstalledVersion -PathType Leaf) -or (Get-Content -LiteralPath $InstalledVersion -Raw).Trim() -ne $ExpectedLaneVersion) { Stop-Bootstrap "续跑所需的固定版 claude-lane 缺失" }
+            if (-not (Test-Path -LiteralPath $InstalledVersion -PathType Leaf) -or (Get-Content -LiteralPath $InstalledVersion -Raw -Encoding UTF8).Trim() -ne $ExpectedLaneVersion) { Stop-Bootstrap "续跑所需的固定版 claude-lane 缺失" }
             $ResumeLaneDownload = Join-Path $TempRoot "resume-claude-lane.zip"
             $ResumeExtract = Join-Path $TempRoot "resume-lane"
             Get-CheckedArtifact $LanePath $LaneSha $ResumeLaneDownload "claude-lane 续跑校验包"
@@ -231,8 +231,8 @@ try {
     $StateScript = Join-Path $ReleaseTarget "scripts\setup-state.ps1"
     $CheckpointScript = Join-Path $ReleaseTarget "scripts\windows-subscription-checkpoint.ps1"
     if (-not (Test-Path -LiteralPath $StateScript -PathType Leaf) -or -not (Test-Path -LiteralPath $CheckpointScript -PathType Leaf)) { Stop-Bootstrap "安装包缺少订阅检查点" }
-    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateScript -Raw))
-    $CheckpointBlock = [scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw))
+    $StateBlock = [scriptblock]::Create((Get-Content -LiteralPath $StateScript -Raw -Encoding UTF8))
+    $CheckpointBlock = [scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw -Encoding UTF8))
     if (-not $ResumeReady) { & $StateBlock -Set CLASH_INSTALLED -Reason clash_installed | Out-Null }
     $CheckpointOutput = @(& $CheckpointBlock -ScriptRoot (Split-Path -Parent $CheckpointScript))
     $CheckpointOutput | Write-Output
@@ -250,10 +250,18 @@ try {
     try {
         Invoke-Download $ReleaseManifestUrl $ReleaseManifestDownload
     } catch {
+        & $StateBlock -Set SUBSCRIPTION_IMPORTED -Reason subscription_imported | Out-Null
         Stop-Bootstrap "机场订阅已导入，但代理尚不能访问 Anthropic 官方源；请在 Clash Verge 选择可用美国节点并开启 TUN 或系统代理，然后重新运行同一命令"
     }
-    if ((Get-FileSha256 $ReleaseManifestDownload) -ne $ExpectedClaudeReleaseManifestSha256) { Stop-Bootstrap "Anthropic 官方固定版本元数据 SHA-256 不匹配" }
-    & $StateBlock -Set PROXY_REACHABLE -Reason proxy_reachable | Out-Null
+    if ((Get-FileSha256 $ReleaseManifestDownload) -ne $ExpectedClaudeReleaseManifestSha256) {
+        & $StateBlock -Set SUBSCRIPTION_IMPORTED -Reason subscription_imported | Out-Null
+        Stop-Bootstrap "Anthropic 官方固定版本元数据 SHA-256 不匹配"
+    }
+    $ProgressBeforeProxyUpdate = [string](@(& $StateBlock -Get) | Select-Object -Last 1)
+    $StatesBeyondProxy = @("AIRPORT_VERIFIED", "WAITING_FOR_ENHANCEMENT_FILES", "WAITING_FOR_ISP", "WAITING_FOR_ACTIVATION", "ROUTING_CONFIGURED", "VALIDATION_PASSED", "COMPLETED")
+    if ($StatesBeyondProxy -notcontains $ProgressBeforeProxyUpdate) {
+        & $StateBlock -Set PROXY_REACHABLE -Reason proxy_reachable | Out-Null
+    }
     Write-Output "机场代理真实连通性验证通过"
 
     $ClaudeTarget = Join-Path $InstallRoot "tools\claude-code\$ExpectedClaudeVersion\claude.exe"
@@ -273,10 +281,40 @@ try {
         Move-Item -LiteralPath $ClaudeDownload -Destination $ClaudeTarget
     }
 
+    $RoutingScript = Join-Path $ReleaseTarget "scripts\windows-routing.ps1"
+    $VerifyScript = Join-Path $ReleaseTarget "scripts\windows-verify.ps1"
+    $RollbackScript = Join-Path $ReleaseTarget "scripts\windows-rollback.ps1"
+    foreach ($RequiredScript in @($RoutingScript, $VerifyScript, $RollbackScript)) {
+        if (-not (Test-Path -LiteralPath $RequiredScript -PathType Leaf)) { Stop-Bootstrap "安装包缺少 Windows 专线路由脚本" }
+    }
+    $CurrentSetupState = ""
+    if (Test-Path -LiteralPath $StateFile -PathType Leaf) {
+        $CurrentStateDocument = Get-Content -LiteralPath $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        $CurrentSetupState = [string]$CurrentStateDocument.state
+    }
+    if ($CurrentSetupState -ne "VALIDATION_PASSED") {
+        $RoutingBlock = [scriptblock]::Create((Get-Content -LiteralPath $RoutingScript -Raw -Encoding UTF8))
+        $RoutingOutput = @(& $RoutingBlock -ScriptRoot (Split-Path -Parent $RoutingScript))
+        $RoutingOutput | Write-Output
+        if ($RoutingOutput -contains "SETUP_STATE=WAITING_FOR_ENHANCEMENT_FILES" -or
+            $RoutingOutput -contains "SETUP_STATE=WAITING_FOR_ISP" -or
+            $RoutingOutput -contains "SETUP_STATE=WAITING_FOR_ACTIVATION") {
+            Write-Output "Windows 安装已保存检查点；完成屏幕提示后重新运行同一启动命令。"
+            return
+        }
+        if ($RoutingOutput -notcontains "SETUP_STATE=ROUTING_CONFIGURED") { Stop-Bootstrap "Windows 路由配置返回未知状态" }
+    }
+    $VerifyBlock = [scriptblock]::Create((Get-Content -LiteralPath $VerifyScript -Raw -Encoding UTF8))
+    if ($CurrentSetupState -eq "VALIDATION_PASSED") {
+        & $VerifyBlock -ScriptRoot (Split-Path -Parent $VerifyScript)
+    } else {
+        & $VerifyBlock -SaveBaseline -ScriptRoot (Split-Path -Parent $VerifyScript)
+    }
+
     $DeepSeekLauncher = Join-Path $ReleaseTarget "scripts\windows-deepseek.ps1"
     if (-not (Test-Path -LiteralPath $DeepSeekLauncher -PathType Leaf)) { Stop-Bootstrap "安装包缺少 Windows DeepSeek 启动器" }
     Write-Output "Claude Code 官方固定版安装与签名校验通过；进入本地 DeepSeek 与专线配置阶段。"
-    $LauncherText = Get-Content -LiteralPath $DeepSeekLauncher -Raw
+    $LauncherText = Get-Content -LiteralPath $DeepSeekLauncher -Raw -Encoding UTF8
     & ([scriptblock]::Create($LauncherText))
 } finally {
     Remove-Item Env:DISABLE_UPDATES -ErrorAction SilentlyContinue

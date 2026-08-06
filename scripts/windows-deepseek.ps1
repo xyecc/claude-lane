@@ -121,7 +121,7 @@ function Get-SafeDiagnostic([string]$Text, [string]$Secret) {
 
 try {
     if (-not (Test-Path -LiteralPath $ClaudePath -PathType Leaf)) { Stop-DeepSeek "未找到受控 Claude Code，请先重新运行同一条 bootstrap 命令" }
-    if (-not (Test-Path -LiteralPath (Join-Path $LaneRoot "VERSION") -PathType Leaf) -or (Get-Content -LiteralPath (Join-Path $LaneRoot "VERSION") -Raw).Trim() -ne "1.3.0") { Stop-DeepSeek "未找到固定版 claude-lane" }
+    if (-not (Test-Path -LiteralPath (Join-Path $LaneRoot "VERSION") -PathType Leaf) -or (Get-Content -LiteralPath (Join-Path $LaneRoot "VERSION") -Raw -Encoding UTF8).Trim() -ne "1.3.0") { Stop-DeepSeek "未找到固定版 claude-lane" }
 
     $Architecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     switch -Regex ($Architecture.ToUpperInvariant()) {

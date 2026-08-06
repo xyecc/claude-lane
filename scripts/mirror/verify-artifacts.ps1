@@ -10,7 +10,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 if ([string]::IsNullOrWhiteSpace($WorkDir)) { $WorkDir = Join-Path $RepoRoot ".mirror-work" }
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) { $ManifestPath = Join-Path $RepoRoot "manifests\stable.json" }
-$Manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+$Manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 function Assert-FileHash([string]$Path, [string]$Expected) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Missing artifact: $Path" }

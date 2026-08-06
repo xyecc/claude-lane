@@ -69,7 +69,7 @@ if /usr/bin/grep -Fq 'x-oss-forbid-overwrite: true' "$SCRIPT_DIR/upload.sh"; the
 if /usr/bin/grep -Fq 'x-oss-object-acl: public-read' "$SCRIPT_DIR/upload.sh"; then ok "OSS 正式对象使用逐对象 public-read"; else bad "OSS 正式对象使用逐对象 public-read"; fi
 if ! /usr/bin/grep -Eq '(ACCESS_KEY_SECRET=.{8,}|ANTHROPIC_AUTH_TOKEN=.{8,}|sk-[A-Za-z0-9]{12,})' "$REPO_ROOT/manifests/stable.json" "$REPO_ROOT/bootstrap.sh" "$REPO_ROOT/bootstrap.ps1"; then ok "发布清单与启动器无明文凭据"; else bad "发布清单与启动器无明文凭据"; fi
 if ! /usr/bin/grep -Eq 'Unblock-File|ExecutionPolicy' "$REPO_ROOT/bootstrap.ps1" &&
-   /usr/bin/grep -Fq '[scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw))' "$REPO_ROOT/bootstrap.ps1"; then
+   /usr/bin/grep -Fq '[scriptblock]::Create((Get-Content -LiteralPath $CheckpointScript -Raw -Encoding UTF8))' "$REPO_ROOT/bootstrap.ps1"; then
   ok "Windows 不解除下载阻止且在已校验归档内存执行"
 else
   bad "Windows 不解除下载阻止且在已校验归档内存执行"
@@ -84,6 +84,9 @@ fi
 if /usr/bin/grep -Fq 'manifests/stable.json and publisher tooling also avoids a circular digest' "$SCRIPT_DIR/build-lane.sh" &&
    /usr/bin/grep -Fq -- "--mtime='1970-01-01T00:00:00Z'" "$SCRIPT_DIR/build-lane.sh" &&
    /usr/bin/grep -Fq 'HEAD_TREE=$(git rev-parse' "$SCRIPT_DIR/build-lane.sh" &&
+   /usr/bin/grep -Fq 'scripts/windows-routing.ps1' "$SCRIPT_DIR/build-lane.sh" &&
+   /usr/bin/grep -Fq 'scripts/windows-verify.ps1' "$SCRIPT_DIR/build-lane.sh" &&
+   /usr/bin/grep -Fq 'scripts/windows-rollback.ps1' "$SCRIPT_DIR/build-lane.sh" &&
    /usr/bin/grep -Fq 'scripts/windows-deepseek.ps1' "$SCRIPT_DIR/build-lane.sh"; then
   ok "lane 归档使用运行时白名单并规避清单哈希循环"
 else
