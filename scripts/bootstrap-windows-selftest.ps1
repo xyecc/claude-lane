@@ -66,11 +66,18 @@ try {
     }
     $BootstrapText = Get-Content -LiteralPath $Bootstrap -Raw
     $CheckpointPosition = $BootstrapText.IndexOf('$CheckpointOutput = @(& $CheckpointBlock')
+    $ProxyVerificationPosition = $BootstrapText.IndexOf('$ReleaseManifestUrl = "$ClaudeOfficialBaseUrl/$ExpectedClaudeVersion/manifest.json"')
     $OfficialDownloadPosition = $BootstrapText.IndexOf('Invoke-Download $OfficialClaudeUrl $ClaudeDownload')
-    if ($CheckpointPosition -ge 0 -and $OfficialDownloadPosition -gt $CheckpointPosition) {
-        Pass "Windows Anthropic 官方下载严格位于订阅检查点之后"
+    if ($CheckpointPosition -ge 0 -and $ProxyVerificationPosition -gt $CheckpointPosition -and $OfficialDownloadPosition -gt $ProxyVerificationPosition) {
+        Pass "Windows 代理实测与 Anthropic 下载严格位于订阅检查点之后"
     } else {
-        Fail "Windows Anthropic 官方下载严格位于订阅检查点之后" "调用顺序不安全"
+        Fail "Windows 代理实测与 Anthropic 下载严格位于订阅检查点之后" "调用顺序不安全"
+    }
+    if ($BootstrapText -match '40f281ff188f1cd4f39309da41a219014dad2555d96e9780c67a2138720d12ed' -and
+        $BootstrapText -match 'PROXY_REACHABLE.*proxy_reachable') {
+        Pass "Windows 代理检查使用固定官方元数据摘要并保存恢复点"
+    } else {
+        Fail "Windows 代理检查使用固定官方元数据摘要并保存恢复点" "代理实测固定值或恢复点缺失"
     }
     if ($BootstrapText -notmatch 'Unblock-File|ExecutionPolicy' -and
         $BootstrapText -match '\[scriptblock\]::Create\(\(Get-Content -LiteralPath \$CheckpointScript -Raw\)\)' -and

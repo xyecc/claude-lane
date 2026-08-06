@@ -9,6 +9,7 @@ NOT_STARTED
   → CLASH_INSTALLED
   → WAITING_FOR_SUBSCRIPTION
   → SUBSCRIPTION_IMPORTED
+  → PROXY_REACHABLE
   → AIRPORT_VERIFIED
   → WAITING_FOR_ISP
   → ROUTING_CONFIGURED
@@ -24,8 +25,9 @@ Clash Verge 安装并打开后：
 
 1. 安装器只判断当前 profile 是否为带非空 URL 的 `remote`；
 2. 没有订阅时写入 `WAITING_FOR_SUBSCRIPTION`，提示用户在 Clash Verge GUI 本地导入，然后退出 0；
-3. 已导入时写入 `SUBSCRIPTION_IMPORTED`，再进入机场连通性、美国节点和 TUN 检查；
-4. 订阅链接不得进入命令参数、状态文件、日志或 Agent 上下文。
+3. 已导入时写入 `SUBSCRIPTION_IMPORTED`，下载并核对固定 SHA-256 的 Anthropic 小型版本元数据；
+4. 实际访问成功后写入 `PROXY_REACHABLE`，再下载 Claude Code；后续 Agent 通过 Clash API 确认美国节点和 TUN 后才写入 `AIRPORT_VERIFIED`；
+5. 订阅链接不得进入命令参数、状态文件、日志或 Agent 上下文。
 
 macOS 状态文件：
 
@@ -65,6 +67,7 @@ Agent 不负责购买机场，也不能在没有基础代理时反过来配置�
 
 - 没有 `profiles.yaml`：`WAITING_FOR_SUBSCRIPTION`。
 - 当前 profile 不是远程订阅或 URL 为空：`WAITING_FOR_SUBSCRIPTION`。
+- 订阅存在但 Anthropic 固定元数据不可达：保持 `SUBSCRIPTION_IMPORTED`，提示选择可用美国节点并开启 TUN 或系统代理，然后重跑同一入口。
 - `profiles.yaml` 结构歧义、重复 `current` 或文件类型异常：失败关闭，不当成“尚未导入”。
 - 订阅已导入但拉取失败、没有美国节点或基础网络不通：停在机场验证阶段，不进入 ISP 配置。
 - 任一秘密只能由用户在本机输入；远程协助者只看固定状态和打码结果。

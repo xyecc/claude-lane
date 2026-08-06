@@ -17,6 +17,7 @@ $ReleaseChannel = "stable"
 $ExpectedLaneVersion = "1.3.0"
 $ExpectedClaudeVersion = "2.1.220"
 $ExpectedClashVersion = "2.5.2"
+$ExpectedClaudeReleaseManifestSha256 = "40f281ff188f1cd4f39309da41a219014dad2555d96e9780c67a2138720d12ed"
 $Expected = @{
     "claude-win32-arm64" = "07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c"
     "claude-win32-x64" = "af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231"
@@ -187,7 +188,7 @@ try {
     if ((Test-Path -LiteralPath $StateFile -PathType Leaf) -and (Test-Path -LiteralPath $ReleaseTarget -PathType Container) -and $KnownClash.Count -gt 0) {
         $SavedState = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
         if ([int]$SavedState.schema -ne 1) { Stop-Bootstrap "安装进度文件 schema 无效" }
-        if (@("WAITING_FOR_SUBSCRIPTION", "SUBSCRIPTION_IMPORTED") -contains [string]$SavedState.state) {
+        if (@("WAITING_FOR_SUBSCRIPTION", "SUBSCRIPTION_IMPORTED", "PROXY_REACHABLE") -contains [string]$SavedState.state) {
             $InstalledVersion = Join-Path $ReleaseTarget "VERSION"
             if (-not (Test-Path -LiteralPath $InstalledVersion -PathType Leaf) -or (Get-Content -LiteralPath $InstalledVersion -Raw).Trim() -ne $ExpectedLaneVersion) { Stop-Bootstrap "续跑所需的固定版 claude-lane 缺失" }
             $ResumeLaneDownload = Join-Path $TempRoot "resume-claude-lane.zip"
@@ -243,6 +244,18 @@ try {
     if ($CheckpointOutput -notcontains "SETUP_STATE=SUBSCRIPTION_IMPORTED") { Stop-Bootstrap "订阅检查点返回未知状态" }
 
     # 只有订阅检查点通过后才允许请求 Anthropic 官方下载域名。
+    $ReleaseManifestDownload = Join-Path $TempRoot "claude-release-manifest.json"
+    $ReleaseManifestUrl = "$ClaudeOfficialBaseUrl/$ExpectedClaudeVersion/manifest.json"
+    Write-Output "检查机场代理能否访问 Anthropic 官方固定版本元数据"
+    try {
+        Invoke-Download $ReleaseManifestUrl $ReleaseManifestDownload
+    } catch {
+        Stop-Bootstrap "机场订阅已导入，但代理尚不能访问 Anthropic 官方源；请在 Clash Verge 选择可用美国节点并开启 TUN 或系统代理，然后重新运行同一命令"
+    }
+    if ((Get-FileSha256 $ReleaseManifestDownload) -ne $ExpectedClaudeReleaseManifestSha256) { Stop-Bootstrap "Anthropic 官方固定版本元数据 SHA-256 不匹配" }
+    & $StateBlock -Set PROXY_REACHABLE -Reason proxy_reachable | Out-Null
+    Write-Output "机场代理真实连通性验证通过"
+
     $ClaudeTarget = Join-Path $InstallRoot "tools\claude-code\$ExpectedClaudeVersion\claude.exe"
     if (Test-Path -LiteralPath $ClaudeTarget -PathType Leaf) {
         if ((Get-FileSha256 $ClaudeTarget) -ne [string]$ClaudeEntry.sha256) { Stop-Bootstrap "现有受控 Claude Code 与固定摘要不符；拒绝覆盖" }
@@ -250,7 +263,7 @@ try {
     } else {
         $ClaudeDownload = Join-Path $TempRoot "claude.exe"
         $OfficialClaudeUrl = "$ClaudeOfficialBaseUrl/$ExpectedClaudeVersion/win32-$Arch/claude.exe"
-        Write-Output "机场订阅已就绪；从 Anthropic 官方源下载固定版 Claude Code $ExpectedClaudeVersion"
+        Write-Output "机场代理已验证；从 Anthropic 官方源下载固定版 Claude Code $ExpectedClaudeVersion"
         Invoke-Download $OfficialClaudeUrl $ClaudeDownload
         if ((Get-FileSha256 $ClaudeDownload) -ne [string]$ClaudeEntry.sha256) { Stop-Bootstrap "Anthropic 官方 Claude Code SHA-256 不匹配" }
         Assert-Authenticode $ClaudeDownload 'Anthropic,? PBC' "Claude Code"

@@ -14,6 +14,7 @@ RELEASE_CHANNEL="stable"
 EXPECTED_LANE_VERSION="1.3.0"
 EXPECTED_CLAUDE_VERSION="2.1.220"
 EXPECTED_CLASH_VERSION="2.5.2"
+EXPECTED_CLAUDE_RELEASE_MANIFEST_SHA256="40f281ff188f1cd4f39309da41a219014dad2555d96e9780c67a2138720d12ed"
 EXPECTED_GPG_FINGERPRINT="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
 EXPECTED_CLAUDE_IDENTIFIER="com.anthropic.claude-code"
 EXPECTED_CLAUDE_TEAM_ID="Q6L2SF6YDW"
@@ -611,7 +612,7 @@ stage_official_claude() {
     official_claude_url="$CLAUDE_OFFICIAL_BASE_URL/$claude_version/$claude_platform/claude"
     official_part="${STAGED_CLAUDE}.part"
     /bin/rm -f -- "$official_part" "$STAGED_CLAUDE" 2>/dev/null || true
-    say "机场订阅已就绪；从 Anthropic 官方源下载固定版 Claude Code $claude_version"
+    say "机场代理已验证；从 Anthropic 官方源下载固定版 Claude Code $claude_version"
     download_url "$official_claude_url" "$official_part" || {
       /bin/rm -f -- "$official_part" 2>/dev/null || true
       die "无法通过当前代理访问 Anthropic 官方 Claude Code 下载地址"
@@ -628,6 +629,27 @@ stage_official_claude() {
 
   claude_version_output=$("$STAGED_CLAUDE" --version 2>/dev/null | /usr/bin/head -n 1) || die "无法读取 Claude Code 版本"
   printf '%s' "$claude_version_output" | /usr/bin/grep -Fq "$EXPECTED_CLAUDE_VERSION" || die "Claude Code 实际版本与固定 stable 版本不一致"
+}
+
+verify_airport_connectivity() {
+  make_temp_dir
+  release_manifest="$BOOT_TMP/claude-release-manifest.json"
+  release_manifest_part="${release_manifest}.part"
+  release_manifest_url="$CLAUDE_OFFICIAL_BASE_URL/$claude_version/manifest.json"
+  /bin/rm -f -- "$release_manifest" "$release_manifest_part" 2>/dev/null || true
+  say "检查机场代理能否访问 Anthropic 官方固定版本元数据"
+  download_url "$release_manifest_url" "$release_manifest_part" || {
+    /bin/rm -f -- "$release_manifest_part" 2>/dev/null || true
+    die "机场订阅已导入，但代理尚不能访问 Anthropic 官方源；请在 Clash Verge 选择可用美国节点并开启 TUN 或系统代理，然后重新运行同一命令"
+  }
+  release_manifest_sha=$(sha256_file "$release_manifest_part" 2>/dev/null || true)
+  [ "$(printf '%s' "$release_manifest_sha" | lowercase)" = "$EXPECTED_CLAUDE_RELEASE_MANIFEST_SHA256" ] || {
+    /bin/rm -f -- "$release_manifest_part" 2>/dev/null || true
+    die "Anthropic 官方固定版本元数据 SHA-256 不匹配"
+  }
+  /bin/mv -- "$release_manifest_part" "$release_manifest" || die "无法保存已验证的官方版本元数据"
+  set_setup_progress PROXY_REACHABLE proxy_reachable
+  say "机场代理真实连通性验证通过"
 }
 
 preflight_claude_cli() {
@@ -981,7 +1003,10 @@ resume_installed_checkpoint() {
   [ -e "$progress_file" ] || return 2
   [ -f "$progress_file" ] && [ ! -L "$progress_file" ] || die "安装进度文件类型不安全"
   progress_state=$(/usr/bin/plutil -extract state raw -o - "$progress_file" 2>/dev/null) || die "安装进度文件损坏"
-  [ "$progress_state" = "WAITING_FOR_SUBSCRIPTION" ] || return 2
+  case "$progress_state" in
+    WAITING_FOR_SUBSCRIPTION|SUBSCRIPTION_IMPORTED|PROXY_REACHABLE) ;;
+    *) return 2 ;;
+  esac
 
   INSTALLED_LANE="$HOME/Library/Application Support/claude-lane/releases/v$lane_version"
   [ -f "$INSTALLED_LANE/VERSION" ] && [ "$(/usr/bin/head -n 1 "$INSTALLED_LANE/VERSION")" = "$lane_version" ] || die "续跑所需的固定版 claude-lane 缺失"
@@ -1165,6 +1190,7 @@ main() {
 
   # 这条官方请求只能出现在订阅检查点之后。无订阅的首次运行在上面
   # 正常退出，因此不会访问 Anthropic 或任何其他海外下载源。
+  verify_airport_connectivity
   stage_official_claude
   install_claude
   run_handshake

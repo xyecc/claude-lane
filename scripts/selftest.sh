@@ -94,6 +94,10 @@ CHECKPOINT_READY=$(bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
   ok "安装进度文件权限为 600" || ng "安装进度文件权限不安全"
 grep -Fq 'example.invalid' "$CLAUDE_LANE_SETUP_ROOT/setup-progress.json" &&
   ng "安装进度文件泄漏订阅 URL" || ok "安装进度文件不含订阅 URL"
+PROXY_STATE=$(bash "$HERE/setup-state.sh" set PROXY_REACHABLE proxy_reachable 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$PROXY_STATE" | grep -q '^SETUP_STATE=PROXY_REACHABLE$' &&
+  [ "$(bash "$HERE/setup-state.sh" get)" = "PROXY_REACHABLE" ] &&
+  ok "代理实测恢复点可安全保存" || ng "PROXY_REACHABLE 状态无法保存"
 
 WAIT_CFG="$SANDBOX/wait-cfg"
 mkdir -p "$WAIT_CFG"

@@ -487,11 +487,19 @@ fi
 
 main_body=$(/usr/bin/sed -n '/^main() {/,/^}/p' "$BOOTSTRAP")
 checkpoint_line=$(printf '%s\n' "$main_body" | /usr/bin/grep -n 'run_subscription_checkpoint' | /usr/bin/tail -n 1 | /usr/bin/awk -F: '{print $1}')
+proxy_check_line=$(printf '%s\n' "$main_body" | /usr/bin/grep -n 'verify_airport_connectivity' | /usr/bin/tail -n 1 | /usr/bin/awk -F: '{print $1}')
 official_line=$(printf '%s\n' "$main_body" | /usr/bin/grep -n 'stage_official_claude' | /usr/bin/awk -F: '{print $1}')
-if [ -n "$checkpoint_line" ] && [ -n "$official_line" ] && [ "$checkpoint_line" -lt "$official_line" ]; then
-  pass "Anthropic 官方下载严格位于订阅检查点之后"
+if [ -n "$checkpoint_line" ] && [ -n "$proxy_check_line" ] && [ -n "$official_line" ] &&
+   [ "$checkpoint_line" -lt "$proxy_check_line" ] && [ "$proxy_check_line" -lt "$official_line" ]; then
+  pass "机场代理实测与 Anthropic 官方下载严格位于订阅检查点之后"
 else
-  fail "Anthropic 官方下载严格位于订阅检查点之后"
+  fail "机场代理实测与 Anthropic 官方下载严格位于订阅检查点之后"
+fi
+if /usr/bin/grep -Fq 'EXPECTED_CLAUDE_RELEASE_MANIFEST_SHA256="40f281ff188f1cd4f39309da41a219014dad2555d96e9780c67a2138720d12ed"' "$BOOTSTRAP" &&
+   /usr/bin/grep -Fq 'set_setup_progress PROXY_REACHABLE proxy_reachable' "$BOOTSTRAP"; then
+  pass "机场检查使用已验签官方元数据摘要并保存恢复点"
+else
+  fail "机场检查使用已验签官方元数据摘要并保存恢复点"
 fi
 
 printf '\nbootstrap selftest: %s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
