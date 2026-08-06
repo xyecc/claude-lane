@@ -54,7 +54,7 @@ fi
 if [ -n "$SINGLE_FILE$SINGLE_KEY" ]; then [ -n "$SINGLE_FILE" ] && [ -n "$SINGLE_KEY" ] || mirror_die "--file and --key must be used together"; fi
 
 valid_key() {
-  printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '^(claude-lane|claude-code|clash-verge)/releases/[A-Za-z0-9._/-]+$|^claude-lane/candidates/[A-Za-z0-9._/-]+$|^manifests/[A-Za-z0-9._/-]+$' || return 1
+  printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '^(claude-lane|claude-code|clash-verge)/releases/[A-Za-z0-9._/-]+$|^manifests/[A-Za-z0-9._/-]+$' || return 1
   printf '%s' "$1" | LC_ALL=C /usr/bin/grep -Eq '(^|/)\.\.(/|$)' && return 1
   return 0
 }
@@ -159,11 +159,11 @@ fi
 
 if [ "$UPLOAD_SCOPE" = candidate ]; then
   upload_one "$CANDIDATE_DIR/manifests/stable.candidate.json" "manifests/candidates/$CANDIDATE_ID.json"
-  upload_one "$CANDIDATE_DIR/claude-lane/releases/v1.3.0/claude-lane.tar.gz" "claude-lane/candidates/$CANDIDATE_ID/claude-lane.tar.gz"
-  upload_one "$CANDIDATE_DIR/claude-lane/releases/v1.3.0/claude-lane.zip" "claude-lane/candidates/$CANDIDATE_ID/claude-lane.zip"
-  upload_one "$CANDIDATE_DIR/bootstrap/install.sh" "claude-lane/candidates/$CANDIDATE_ID/install.sh"
-  upload_one "$CANDIDATE_DIR/bootstrap/install.ps1" "claude-lane/candidates/$CANDIDATE_ID/install.ps1"
-  upload_one "$CANDIDATE_DIR/bootstrap/evidence.txt" "claude-lane/candidates/$CANDIDATE_ID/evidence.txt"
+  upload_one "$CANDIDATE_DIR/claude-lane/releases/v1.3.0/claude-lane.tar.gz" "claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.tar.gz"
+  upload_one "$CANDIDATE_DIR/claude-lane/releases/v1.3.0/claude-lane.zip" "claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.zip"
+  upload_one "$CANDIDATE_DIR/bootstrap/install.sh" "claude-lane/releases/candidates/$CANDIDATE_ID/install.sh"
+  upload_one "$CANDIDATE_DIR/bootstrap/install.ps1" "claude-lane/releases/candidates/$CANDIDATE_ID/install.ps1"
+  upload_one "$CANDIDATE_DIR/bootstrap/evidence.txt" "claude-lane/releases/candidates/$CANDIDATE_ID/evidence.txt"
   mirror_say "candidate upload complete; stable objects were not touched"
   exit 0
 fi

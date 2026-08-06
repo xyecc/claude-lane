@@ -111,10 +111,10 @@ CDN 返回的 `ETag`、`Content-MD5` 或旁路哈希不能替代官方签名 man
 ```text
 /claude-lane/releases/bootstrap/v1/install.sh
 /claude-lane/releases/bootstrap/v1/install.ps1
-/claude-lane/candidates/<commit>/install.sh
-/claude-lane/candidates/<commit>/install.ps1
-/claude-lane/candidates/<commit>/claude-lane.tar.gz
-/claude-lane/candidates/<commit>/claude-lane.zip
+/claude-lane/releases/candidates/<commit>/install.sh
+/claude-lane/releases/candidates/<commit>/install.ps1
+/claude-lane/releases/candidates/<commit>/claude-lane.tar.gz
+/claude-lane/releases/candidates/<commit>/claude-lane.zip
 /claude-lane/releases/v1.3.0/claude-lane.tar.gz
 /clash-verge/releases/<version>/Clash.Verge_<version>_aarch64.dmg
 /clash-verge/releases/<version>/Clash.Verge_<version>_x64.dmg

@@ -59,8 +59,8 @@ else
 fi
 candidate_upload_output=$(/bin/bash "$SCRIPT_DIR/upload.sh" --scope candidate --candidate-id deadbee 2>&1)
 if printf '%s' "$candidate_upload_output" | /usr/bin/grep -Fq 'dry-run'; then ok "RC 上传器默认 dry-run"; else bad "RC 上传器默认 dry-run"; fi
-if /usr/bin/grep -Fq 'claude-lane/candidates/$CANDIDATE_ID/claude-lane.tar.gz' "$SCRIPT_DIR/generate-manifest.sh" &&
-   /usr/bin/grep -Fq 'claude-lane/candidates/$CANDIDATE_ID/claude-lane.zip' "$SCRIPT_DIR/upload.sh"; then
+if /usr/bin/grep -Fq 'claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.tar.gz' "$SCRIPT_DIR/generate-manifest.sh" &&
+   /usr/bin/grep -Fq 'claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.zip' "$SCRIPT_DIR/upload.sh"; then
   ok "RC lane 归档使用 commit 专属不可覆盖路径"
 else
   bad "RC lane 归档使用 commit 专属不可覆盖路径"

@@ -91,8 +91,8 @@ TMP_OUTPUT="${OUTPUT}.tmp.$$"
 if [ "$RELEASE_STATUS" = candidate ]; then
   /usr/bin/plutil -insert candidate_id -string "$CANDIDATE_ID" "$TMP_OUTPUT" 2>/dev/null ||
     /usr/bin/plutil -replace candidate_id -string "$CANDIDATE_ID" "$TMP_OUTPUT" || mirror_die "cannot record candidate id"
-  /usr/bin/plutil -replace claude_lane.path -string "claude-lane/candidates/$CANDIDATE_ID/claude-lane.tar.gz" "$TMP_OUTPUT" || mirror_die "cannot pin candidate lane tar path"
-  /usr/bin/plutil -replace claude_lane.windows_path -string "claude-lane/candidates/$CANDIDATE_ID/claude-lane.zip" "$TMP_OUTPUT" || mirror_die "cannot pin candidate lane zip path"
+  /usr/bin/plutil -replace claude_lane.path -string "claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.tar.gz" "$TMP_OUTPUT" || mirror_die "cannot pin candidate lane tar path"
+  /usr/bin/plutil -replace claude_lane.windows_path -string "claude-lane/releases/candidates/$CANDIDATE_ID/claude-lane.zip" "$TMP_OUTPUT" || mirror_die "cannot pin candidate lane zip path"
 else
   /usr/bin/plutil -remove candidate_id "$TMP_OUTPUT" >/dev/null 2>&1 || true
 fi

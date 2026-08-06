@@ -55,11 +55,11 @@ bash scripts/mirror/upload.sh --execute --profile primary \
 
 ```text
 manifests/candidates/<commit>.json
-claude-lane/candidates/<commit>/claude-lane.tar.gz
-claude-lane/candidates/<commit>/claude-lane.zip
-claude-lane/candidates/<commit>/install.sh
-claude-lane/candidates/<commit>/install.ps1
-claude-lane/candidates/<commit>/evidence.txt
+claude-lane/releases/candidates/<commit>/claude-lane.tar.gz
+claude-lane/releases/candidates/<commit>/claude-lane.zip
+claude-lane/releases/candidates/<commit>/install.sh
+claude-lane/releases/candidates/<commit>/install.ps1
+claude-lane/releases/candidates/<commit>/evidence.txt
 ```
 
 RC 验收不修改 `manifests/stable.json`，也不上传正式 bootstrap 路径。

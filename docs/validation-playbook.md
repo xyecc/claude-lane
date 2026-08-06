@@ -34,7 +34,7 @@ bash scripts/mirror/verify-artifacts.sh
 当前 stable 是 `blocked`，不得通过测试注入参数把生产 `bootstrap.sh` 当作已发布启动器运行。发布者提供 commit 绑定的 RC 地址后，Apple Silicon 与 Intel Mac 分别执行该地址；入口只接受对应 commit 的候选清单。
 
 ```bash
-curl -fL "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/candidates/<commit>/install.sh" -o /tmp/claude-lane-rc.sh
+curl -fL "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/releases/candidates/<commit>/install.sh" -o /tmp/claude-lane-rc.sh
 shasum -a 256 /tmp/claude-lane-rc.sh
 bash /tmp/claude-lane-rc.sh
 ```
@@ -47,7 +47,7 @@ bash /tmp/claude-lane-rc.sh
 
 ```powershell
 $id = "<commit>"
-$base = "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/candidates/$id"
+$base = "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com/claude-lane/releases/candidates/$id"
 Invoke-WebRequest "$base/install.ps1" -OutFile "$env:TEMP\claude-lane-rc.ps1"
 Invoke-WebRequest "$base/evidence.txt" -OutFile "$env:TEMP\claude-lane-evidence.txt"
 $expected = ((Select-String '^install_ps1_sha256=' "$env:TEMP\claude-lane-evidence.txt").Line -split '=', 2)[1]
