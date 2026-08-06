@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Immutable Alibaba OSS uploader. Dry-run by default; credentials never appear in argv/output.
+# Immutable public-release Alibaba OSS uploader. Dry-run by default;
+# credentials never appear in argv/output and each new object is public-read.
 
 set -u
 set -o pipefail
@@ -23,7 +24,7 @@ REQUEST_ID=0
 HTTP_STATUS=""
 
 usage() {
-  printf '%s\n' '用法：bash scripts/mirror/upload.sh [--execute] [--profile primary|backup] [--scope all|upstream|lane] [--env-file <path>] [--file <path> --key <object>]'
+  printf '%s\n' '用法：bash scripts/mirror/upload.sh [--execute] [--profile primary|backup] [--scope all|upstream|lane|bootstrap] [--env-file <path>] [--file <path> --key <object>]'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -41,7 +42,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 [ "$PROFILE" = primary ] || [ "$PROFILE" = backup ] || mirror_die "profile must be primary or backup"
-[ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = upstream ] || [ "$UPLOAD_SCOPE" = lane ] || mirror_die "scope must be all, upstream, or lane"
+[ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = upstream ] || [ "$UPLOAD_SCOPE" = lane ] || [ "$UPLOAD_SCOPE" = bootstrap ] || mirror_die "scope must be all, upstream, lane, or bootstrap"
 if [ -n "$SINGLE_FILE$SINGLE_KEY" ]; then [ -n "$SINGLE_FILE" ] && [ -n "$SINGLE_KEY" ] || mirror_die "--file and --key must be used together"; fi
 
 valid_key() {
@@ -92,7 +93,7 @@ trap 'exit 129' HUP
 sign_v1() {
   method=$1; content_type=$2; date_value=$3; expected_sha=$4; canonical_resource=$5
   if [ "$method" = PUT ]; then
-    printf '%s\n\n%s\n%s\nx-oss-forbid-overwrite:true\nx-oss-meta-sha256:%s\n%s' "$method" "$content_type" "$date_value" "$expected_sha" "$canonical_resource"
+    printf '%s\n\n%s\n%s\nx-oss-forbid-overwrite:true\nx-oss-meta-sha256:%s\nx-oss-object-acl:public-read\n%s' "$method" "$content_type" "$date_value" "$expected_sha" "$canonical_resource"
   else
     printf '%s\n\n%s\n%s\n%s' "$method" "$content_type" "$date_value" "$canonical_resource"
   fi |
@@ -115,7 +116,7 @@ oss_request() {
     printf 'request = "%s"\nurl = "https://%s.%s/%s"\noutput = "%s"\nwrite-out = "%%{http_code}"\n' "$method" "$OSS_BUCKET" "$endpoint_host" "$object_key" "$output_file"
     printf 'header = "Date: %s"\nheader = "Authorization: OSS %s:%s"\n' "$date_value" "$OSS_ACCESS_KEY_ID" "$signature"
     if [ "$method" = PUT ]; then
-      printf 'header = "Content-Type: %s"\nheader = "x-oss-forbid-overwrite: true"\nheader = "x-oss-meta-sha256: %s"\ndata-binary = "@%s"\n' "$content_type" "$expected_sha" "$input_file"
+      printf 'header = "Content-Type: %s"\nheader = "x-oss-forbid-overwrite: true"\nheader = "x-oss-meta-sha256: %s"\nheader = "x-oss-object-acl: public-read"\ndata-binary = "@%s"\n' "$content_type" "$expected_sha" "$input_file"
     fi
   } > "$config"
   /bin/chmod 600 "$config"
@@ -149,20 +150,9 @@ if [ -n "$SINGLE_FILE" ]; then
 fi
 
 MANIFEST="$MIRROR_REPO_ROOT/manifests/stable.json"
-CLAUDE_VERSION=$(/usr/bin/plutil -extract claude_code.version raw -o - "$MANIFEST")
 CLASH_VERSION=$(/usr/bin/plutil -extract clash_verge.version raw -o - "$MANIFEST")
-CLAUDE_DIR="$MIRROR_WORK_DIR/claude-code/releases/$CLAUDE_VERSION"
 CLASH_DIR="$MIRROR_WORK_DIR/clash-verge/releases/v$CLASH_VERSION"
 if [ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = upstream ]; then
-for pair in \
-  "manifest.json|claude-code/releases/$CLAUDE_VERSION/manifest.json" \
-  "manifest.json.sig|claude-code/releases/$CLAUDE_VERSION/manifest.json.sig" \
-  "claude-darwin-arm64|claude-code/releases/$CLAUDE_VERSION/claude-darwin-arm64" \
-  "claude-darwin-x64|claude-code/releases/$CLAUDE_VERSION/claude-darwin-x64" \
-  "claude-win32-arm64.exe|claude-code/releases/$CLAUDE_VERSION/claude-win32-arm64.exe" \
-  "claude-win32-x64.exe|claude-code/releases/$CLAUDE_VERSION/claude-win32-x64.exe"; do
-  upload_one "$CLAUDE_DIR/${pair%%|*}" "${pair#*|}"
-done
 for name in "Clash.Verge_${CLASH_VERSION}_aarch64.dmg" "Clash.Verge_${CLASH_VERSION}_x64.dmg" "Clash.Verge_${CLASH_VERSION}_arm64-setup.exe" "Clash.Verge_${CLASH_VERSION}_arm64-setup.exe.sig" "Clash.Verge_${CLASH_VERSION}_x64-setup.exe" "Clash.Verge_${CLASH_VERSION}_x64-setup.exe.sig" LICENSE SOURCE.txt; do
   upload_one "$CLASH_DIR/$name" "clash-verge/releases/v$CLASH_VERSION/$name"
 done
@@ -172,5 +162,9 @@ if [ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = lane ]; then
   LANE_DIR="$MIRROR_WORK_DIR/claude-lane/releases/v$LANE_VERSION"
   upload_one "$LANE_DIR/claude-lane.tar.gz" "claude-lane/releases/v$LANE_VERSION/claude-lane.tar.gz"
   upload_one "$LANE_DIR/claude-lane.zip" "claude-lane/releases/v$LANE_VERSION/claude-lane.zip"
+fi
+if [ "$UPLOAD_SCOPE" = all ] || [ "$UPLOAD_SCOPE" = bootstrap ]; then
+  upload_one "$MIRROR_REPO_ROOT/bootstrap.sh" "claude-lane/releases/bootstrap/v1/install.sh"
+  upload_one "$MIRROR_REPO_ROOT/bootstrap.ps1" "claude-lane/releases/bootstrap/v1/install.ps1"
 fi
 mirror_say "artifact upload complete; stable manifest was not uploaded"

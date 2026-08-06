@@ -92,25 +92,20 @@ cat >"$VALID_MANIFEST" <<'JSON'
     "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
   },
   "claude_code": {
-    "version": "2.1.212",
+    "version": "2.1.220",
+    "distribution": "anthropic-official-after-proxy",
     "manifest_gpg_fingerprint": "31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE",
     "darwin_arm64": {
-      "path": "claude-code/releases/2.1.212/claude-darwin-arm64",
-      "sha256": "09ecba2ab2df9b6ee5b0695e26f65dea60fb3b6af3d3542ee09f466838d1e574"
+      "sha256": "8addc857f3fe64d5a0368af9ee50321b50afb4a6918ba3ef018ab84f5dbbe081"
     },
     "darwin_x86_64": {
-      "path": "claude-code/releases/2.1.212/claude-darwin-x64",
-      "sha256": "7681a0634c89fa4474e53c0c794e992944aebf3409a7a2b87ea9f9b0194ea341"
+      "sha256": "dca7be0aa7d3d924836d440e0c6d8e3d47ef3c8e61fa5809b54b9017170ce2f3"
     },
     "win32_arm64": {
-      "path": "claude-code/releases/2.1.212/claude-win32-arm64.exe",
-      "sha256": "adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5",
-      "signature_status": "verified-authenticode"
+      "sha256": "07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c"
     },
     "win32_x64": {
-      "path": "claude-code/releases/2.1.212/claude-win32-x64.exe",
-      "sha256": "fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa",
-      "signature_status": "verified-authenticode"
+      "sha256": "af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231"
     }
   },
   "clash_verge": {
@@ -126,12 +121,12 @@ cat >"$VALID_MANIFEST" <<'JSON'
     "win32_arm64": {
       "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe",
       "sha256": "973fafb5f154e541b34c1315f7de7440daf68d05f2e52fa08da2bcc71b6c3214",
-      "signature_status": "verified-authenticode"
+      "signature_status": "verified-tauri-minisign-runtime-authenticode"
     },
     "win32_x64": {
       "path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe",
       "sha256": "ba42f00b1082e352352080170fe86ae411bcc854cb13f1b8bebc9025e8a7cbf4",
-      "signature_status": "verified-authenticode"
+      "signature_status": "verified-tauri-minisign-runtime-authenticode"
     }
   }
 }
@@ -158,6 +153,12 @@ else
   fail "bootstrap 完成标记脚本通过 Bash 语法检查"
 fi
 
+if /bin/bash -n "$REPO_DIR/scripts/setup-state.sh" "$REPO_DIR/scripts/subscription-checkpoint.sh"; then
+  pass "安装进度与订阅检查点通过 Bash 语法检查"
+else
+  fail "安装进度与订阅检查点通过 Bash 语法检查"
+fi
+
 MARK_HOME="$TMP_ROOT/mark-home"
 MARK_ID="20260802-120000"
 MARK_FILE="$MARK_HOME/Library/Application Support/claude-lane/bootstrap-status/complete.$MARK_ID"
@@ -179,10 +180,10 @@ else
   pass "bootstrap 完成标记拒绝无效 deployment id"
 fi
 
-expect_success "--help 不触发发布流程" "当前 stable 发布块尚未配置" \
+expect_success "--help 不触发发布流程" "当前 stable 发布块尚未配置 manifest" \
   /bin/bash "$BOOTSTRAP" --help
 
-expect_failure "正式路径在国内源占位时失败关闭" "国内主备下载源尚未发布" \
+expect_failure "正式路径在 manifest 摘要占位时失败关闭" "stable manifest 的固定 SHA-256 尚未发布" \
   /bin/bash "$BOOTSTRAP" --dry-run
 
 formal_output="$TMP_ROOT/formal-output.txt"
@@ -236,9 +237,9 @@ windows_hash_manifest="$TMP_ROOT/windows-hash.json"
 copy_and_replace "$windows_hash_manifest" claude_code.win32_x64.sha256 string 1111111111111111111111111111111111111111111111111111111111111111
 expect_failure "Windows 固定摘要漂移也阻止完整矩阵发布" "Windows x64 摘要不匹配" test_bootstrap "$windows_hash_manifest"
 
-windows_signature_manifest="$TMP_ROOT/windows-signature.json"
-copy_and_replace "$windows_signature_manifest" clash_verge.win32_arm64.signature_status string pending-windows-arm64
-expect_failure "Windows 真机签名证据缺失阻止完整矩阵发布" "Windows arm64 尚未通过真实 Windows 签名验证" test_bootstrap "$windows_signature_manifest"
+distribution_manifest="$TMP_ROOT/distribution.json"
+copy_and_replace "$distribution_manifest" claude_code.distribution string public-mirror
+expect_failure "Claude Code 公开镜像策略被拒绝" "必须在代理可用后从 Anthropic 官方源安装" test_bootstrap "$distribution_manifest"
 
 fingerprint_manifest="$TMP_ROOT/fingerprint.json"
 copy_and_replace "$fingerprint_manifest" claude_code.manifest_gpg_fingerprint string 0000000000000000000000000000000000000000
@@ -382,7 +383,7 @@ else
 fi
 
 if /usr/bin/grep -Fq 'scripts/profile-config.sh scripts/macos-json.js' "$BOOTSTRAP" && \
-   /usr/bin/grep -Fq 'scripts/bootstrap-complete.sh templates/1-proxies.yaml' "$BOOTSTRAP" && \
+   /usr/bin/grep -Fq 'scripts/bootstrap-complete.sh scripts/setup-state.sh scripts/subscription-checkpoint.sh' "$BOOTSTRAP" && \
    /usr/bin/grep -Fq 'docs/troubleshooting.md docs/account-safety.md docs/porting.md' "$BOOTSTRAP"; then
   pass "仓库包安装前检查运行必需脚本与模板"
 else
@@ -478,10 +479,19 @@ fi
 
 if /usr/bin/plutil -convert xml1 -o /dev/null -- "$REPO_DIR/manifests/stable.json" >/dev/null 2>&1 && \
    /usr/bin/grep -Fq '"release_status": "blocked"' "$REPO_DIR/manifests/stable.json" && \
-   /usr/bin/grep -Fq '"base_url": "TBD"' "$REPO_DIR/manifests/stable.json"; then
+   /usr/bin/grep -Fq '"sha256": "TBD"' "$REPO_DIR/manifests/stable.json"; then
   pass "仓库 stable manifest 保持发布门禁"
 else
   fail "仓库 stable manifest 保持发布门禁"
+fi
+
+main_body=$(/usr/bin/sed -n '/^main() {/,/^}/p' "$BOOTSTRAP")
+checkpoint_line=$(printf '%s\n' "$main_body" | /usr/bin/grep -n 'run_subscription_checkpoint' | /usr/bin/tail -n 1 | /usr/bin/awk -F: '{print $1}')
+official_line=$(printf '%s\n' "$main_body" | /usr/bin/grep -n 'stage_official_claude' | /usr/bin/awk -F: '{print $1}')
+if [ -n "$checkpoint_line" ] && [ -n "$official_line" ] && [ "$checkpoint_line" -lt "$official_line" ]; then
+  pass "Anthropic 官方下载严格位于订阅检查点之后"
+else
+  fail "Anthropic 官方下载严格位于订阅检查点之后"
 fi
 
 printf '\nbootstrap selftest: %s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"

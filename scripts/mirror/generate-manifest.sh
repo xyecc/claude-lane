@@ -51,8 +51,6 @@ check_file() {
 
 for required in \
   "$CLAUDE_DIR/manifest.json" "$CLAUDE_DIR/manifest.json.sig" \
-  "$CLAUDE_DIR/claude-darwin-arm64" "$CLAUDE_DIR/claude-darwin-x64" \
-  "$CLAUDE_DIR/claude-win32-arm64.exe" "$CLAUDE_DIR/claude-win32-x64.exe" \
   "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_aarch64.dmg" "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64.dmg" \
   "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe" "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe.sig" \
   "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64-setup.exe" "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64-setup.exe.sig" \
@@ -83,10 +81,6 @@ replace_file_metadata() {
 replace_file_metadata claude_code.manifest "$CLAUDE_DIR/manifest.json"
 /usr/bin/plutil -replace claude_code.manifest.signature_size -integer "$(mirror_size "$CLAUDE_DIR/manifest.json.sig")" "$TMP_OUTPUT"
 /usr/bin/plutil -replace claude_code.manifest.signature_sha256 -string "$(mirror_sha256 "$CLAUDE_DIR/manifest.json.sig")" "$TMP_OUTPUT"
-replace_file_metadata claude_code.darwin_arm64 "$CLAUDE_DIR/claude-darwin-arm64"
-replace_file_metadata claude_code.darwin_x86_64 "$CLAUDE_DIR/claude-darwin-x64"
-replace_file_metadata claude_code.win32_arm64 "$CLAUDE_DIR/claude-win32-arm64.exe"
-replace_file_metadata claude_code.win32_x64 "$CLAUDE_DIR/claude-win32-x64.exe"
 replace_file_metadata clash_verge.arm64 "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_aarch64.dmg"
 replace_file_metadata clash_verge.x86_64 "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_x64.dmg"
 replace_file_metadata clash_verge.win32_arm64 "$CLASH_DIR/Clash.Verge_${CLASH_VERSION}_arm64-setup.exe"
@@ -98,24 +92,6 @@ replace_file_metadata clash_verge.win32_x64 "$CLASH_DIR/Clash.Verge_${CLASH_VERS
 /usr/bin/plutil -replace claude_lane.sha256 -string "$(mirror_sha256 "$LANE_DIR/claude-lane.tar.gz")" "$TMP_OUTPUT"
 /usr/bin/plutil -replace claude_lane.windows_sha256 -string "$(mirror_sha256 "$LANE_DIR/claude-lane.zip")" "$TMP_OUTPUT"
 /usr/bin/plutil -replace distribution.synchronized_at -string "$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')" "$TMP_OUTPUT"
-
-for platform in win32-arm64 win32-x64; do
-  evidence="$MIRROR_WORK_DIR/windows-audit/$platform.json"
-  if [ -f "$evidence" ] &&
-     [ "$(/usr/bin/plutil -extract passed raw -o - "$evidence" 2>/dev/null)" = "true" ] &&
-     [ "$(/usr/bin/plutil -extract platform raw -o - "$evidence" 2>/dev/null)" = "$platform" ] &&
-     [ "$(/usr/bin/plutil -extract bootstrap_selftest.passed raw -o - "$evidence" 2>/dev/null)" = "true" ] &&
-     [ "$(/usr/bin/plutil -extract host.manifest_sha256 raw -o - "$evidence" 2>/dev/null)" = "$(mirror_sha256 "$TEMPLATE")" ]; then
-    case "$platform" in
-      win32-arm64) suffix=win32_arm64 ;;
-      win32-x64) suffix=win32_x64 ;;
-    esac
-    /usr/bin/plutil -replace "claude_code.$suffix.signature_status" -string verified-authenticode "$TMP_OUTPUT"
-    /usr/bin/plutil -replace "clash_verge.$suffix.signature_status" -string verified-authenticode "$TMP_OUTPUT"
-  elif [ -f "$evidence" ]; then
-    mirror_warn "ignoring incomplete or mismatched Windows evidence: $evidence"
-  fi
-done
 
 /usr/bin/plutil -convert json -o "$TMP_OUTPUT.json" "$TMP_OUTPUT" || mirror_die "candidate is not valid JSON"
 /bin/mv "$TMP_OUTPUT.json" "$OUTPUT" || mirror_die "cannot finalize candidate"

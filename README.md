@@ -14,14 +14,14 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 
 ## v1.3.0 当前状态
 
-本版加入 manifest 驱动的确定性 `bootstrap.sh` 与 `bootstrap.ps1`。固定上游基线为 Claude Code `2.1.212`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel 与 Windows ARM64 / x64。阿里云私有 OSS 主存储已经过最小权限验证，但备用国内源、私有下载网关和 Windows 真机签名证据仍未齐，因此 stable **保持阻断**。
+本版加入 manifest 驱动、可暂停恢复的 `bootstrap.sh` 与 `bootstrap.ps1`。固定上游基线为 Claude Code `2.1.220`、Clash Verge Rev `2.5.2`，覆盖 macOS Apple Silicon / Intel 与 Windows ARM64 / x64。Clash 四个平台安装包已发布到阿里云 OSS 并完成匿名回下载校验；Claude Code 不进入国内公开镜像，而是在订阅代理可用后从 Anthropic 官方固定版本地址下载。备用源按维护者决定暂缓，stable 仍因 lane 归档、真机和端到端证据未齐而**保持阻断**。
 
 因此：
 
 - 启动器遇到示例域名、`TBD`、空值或非 64 位 SHA-256 时会在修改系统前安全停止；
-- 目前没有可公开复制的国内 `curl | bash` 安装命令；
-- 正式制品、备用源、离线包、Windows 双架构真机和无代理干净 Mac 端到端验收尚未全部完成；
-- 发布者验证包可在 Windows 真机离线验签、试装并临时连接 DeepSeek，但不是 stable 用户下载入口，也不自动配置 Windows 专线路由；
+- 目前没有可公开复制的 stable 国内安装命令；
+- lane 归档、Windows 双架构真机、Intel Mac 和无代理干净 Mac 端到端验收尚未全部完成；
+- 不再生成含大体积制品的 Windows 搬运验证包；Windows 使用同一 OSS 启动链，专线路由仍需按移植文档处理；
 - 不要删掉校验或临时换第三方镜像来绕过门禁。
 
 分发清单、签名、对象存储和发布门禁见 [`docs/bootstrap.md`](docs/bootstrap.md)。当前可先审阅 [`RUNBOOK.md`](RUNBOOK.md)，或在已有 Clash Verge 环境上使用 [`docs/manual-setup.md`](docs/manual-setup.md)。
@@ -39,7 +39,7 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 
 ## 需要准备
 
-1. 一份含美国节点的机场订阅；
+1. 一份含美国节点的机场订阅；开始安装时可以暂时没有，Clash Verge 装好后会在订阅检查点暂停；
 2. 一个美国静态住宅 / ISP SOCKS5；不能是动态或轮换 IP；
 3. 一台受支持的 macOS；
 4. bootstrap 正式发布后，一枚额度受限、可撤销的安装专用 DeepSeek API Key。
@@ -61,8 +61,11 @@ Claude 流量 → Clash TUN → Claude 分组 → 静态 SOCKS5
 ```text
 bootstrap.sh
   ├─ 检查 macOS、CPU、磁盘和已有代理
-  ├─ 读取固定版本 manifest，选择国内主/备源
-  ├─ 下载并校验 Claude Code、仓库包和 Clash Verge
+  ├─ 读取固定版本 manifest，从阿里云 OSS 下载仓库包和 Clash Verge
+  ├─ 安装并打开 Clash Verge
+  ├─ 没有订阅 → 保存 WAITING_FOR_SUBSCRIPTION 后正常暂停
+  ├─ 用户在 GUI 本地导入订阅；重新运行后从检查点继续
+  ├─ 代理可用后从 Anthropic 官方地址下载固定版 Claude Code 并验签
   ├─ 从终端隐藏读取 DeepSeek 安装 Key
   ├─ 用 deepseek-v4-flash / max 做模型与只读工具自检
   └─ 启动 Agent 完整读取 RUNBOOK.md
@@ -74,7 +77,9 @@ bootstrap.sh
        └─ Phase 6：退出 DeepSeek 临时模式，用户再登录 Claude
 ```
 
-启动阶段不得访问或登录 Anthropic。六项验证全绿后，启动器才清理 DeepSeek 临时环境、配置、会话和日志，并用干净环境进入正常 Claude 登录流程。
+检查点完整状态与用户/自动化边界见 [`docs/setup-checkpoints.md`](docs/setup-checkpoints.md)。机场订阅、ISP 凭证、付款和最终账号登录都是明确的人工作业，不会被误报成安装失败。
+
+订阅检查点之前不得访问或登录 Anthropic。检查点之后只允许通过已验证代理访问 Anthropic 官方固定版下载地址；六项验证全绿后，启动器才清理 DeepSeek 临时环境、配置、会话和日志，并用干净环境进入正常 Claude 登录流程。
 
 Agent 的唯一权威手册是 [`RUNBOOK.md`](RUNBOOK.md)：
 
@@ -158,9 +163,9 @@ bash scripts/rollback.sh <deployment-id>
 | `scripts/bootstrap-selftest.sh` | bootstrap 失败关闭与恢复测试 |
 | `scripts/bootstrap-windows-selftest.ps1` | Windows 清单与签名证据失败关闭测试 |
 | `scripts/windows-validation.ps1` | Windows 真机验签、自测与非秘密审计证据入口 |
-| `scripts/windows-local-rc.ps1` | Windows 离线候选包的固定制品验签与本地试装入口 |
+| `scripts/windows-local-rc.ps1` | 已退役的 Windows 搬运 RC 兼容入口；失败关闭 |
 | `scripts/windows-deepseek.ps1` | Windows 本地隐藏读取 Key、握手并启动隔离 DeepSeek Claude 会话 |
-| `scripts/mirror/build-windows-validation-bundle.sh` | 生成可搬运的双架构 Windows 验证包 |
+| `scripts/mirror/build-windows-validation-bundle.sh` | 已退役的兼容入口；拒绝生成大体积搬运包 |
 | `scripts/mirror/` | macOS 发布机镜像抓取、验证、清单、OSS 上传和人工晋级工具 |
 | `scripts/bootstrap-complete.sh` | Phase 6 非秘密完成标记；仍需父启动器独立六项复验 |
 | `docs/validation-playbook.md` | v1.3.0 Mac / Windows 真机验收任务书 |

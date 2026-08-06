@@ -36,6 +36,8 @@
 
 bootstrap 正常路径负责确定性下载、校验并安装固定版 Claude Code、仓库包和 Clash Verge Rev。Agent 不临时搜索下载站，也不自行改用 GitHub、Homebrew、npm 或未知镜像。
 
+bootstrap 在启动 Agent 前执行订阅检查点：没有当前远程订阅时写入 `WAITING_FOR_SUBSCRIPTION`，打开 Clash Verge 并正常结束；这不是安装失败。用户只能在 GUI 本地导入订阅，完成后重新运行同一启动命令。启动器必须重新校验已安装组件，再从检查点继续，不得重复覆盖安装，也不得在订阅检查点通过前读取 DeepSeek Key 或启动任何 Agent。检查点细则见 `docs/setup-checkpoints.md`。
+
 先探测本机代理软件与 VPN：
 
 ```bash
@@ -54,7 +56,7 @@ scutil --nc list
 3. 让用户打开 TUN 模式、保持规则模式，并退出旧代理软件。
 4. `curl -sS --max-time 15 https://api.ipify.org | /usr/bin/osascript -l JavaScript scripts/macos-json.js mask-value >/dev/null` 成功后才进入 Phase 0。
 
-STOP：用户不退出旧代理软件；用户无法在 GUI 导入订阅；bootstrap 安装或签名校验失败。
+STOP：用户不退出旧代理软件；用户无法在 GUI 导入订阅；bootstrap 安装或签名校验失败。没有订阅但用户准备稍后导入时属于正常暂停，不记为失败。
 
 ## Phase 0：环境体检（只读）
 
@@ -69,7 +71,19 @@ STOP：用户不退出旧代理软件；用户无法在 GUI 导入订阅；boots
 
 STOP：Clash 没装或没运行；订阅确认没有美国节点；平台不是 macOS；必需的系统组件缺失且启动器无法恢复。
 
+Phase 0 全部通过后记录非秘密进度：
+
+```bash
+bash scripts/setup-state.sh set AIRPORT_VERIFIED airport_verified
+```
+
 ## Phase 1：本地输入凭证
+
+先记录正在等待用户本地输入 ISP，不包含任何凭证：
+
+```bash
+bash scripts/setup-state.sh set WAITING_FOR_ISP isp_required
+```
 
 1. 先运行 `bash scripts/profile-config.sh summary`。proxies uid 已存在时，凭证必须由用户自己写入；告诉用户在一个本地终端、仓库目录中运行：
 
@@ -141,6 +155,12 @@ tail -20 "$CFG/logs/service/service_latest.log" | grep -i "Start TUN listening e
 
 出现 `add route: ... file exists` 说明其他 VPN 占用路由。按 `docs/troubleshooting.md` 第 1 条处理，不要反复重启内核。
 
+激活检查通过后记录：
+
+```bash
+bash scripts/setup-state.sh set ROUTING_CONFIGURED routing_configured
+```
+
 ## Phase 5：六项验证
 
 ```bash
@@ -148,6 +168,12 @@ bash scripts/verify.sh --save-baseline
 ```
 
 六项全绿才算配置完成。任一项失败，就按脚本提示和 `docs/troubleshooting.md` 修复后重跑；禁止在验证失败时宣布完成，也不要把包含未打码 IP 或配置的原始输出贴进对话。
+
+六项全绿后记录：
+
+```bash
+bash scripts/setup-state.sh set VALIDATION_PASSED validation_passed
+```
 
 `--save-baseline` 只在全绿时把实测出口写入 `$CFG/claude-lane-state.json`。日常运行 `bash scripts/verify.sh` 会与该基线比较，从而发现出口变化。
 
@@ -165,11 +191,13 @@ bash scripts/verify.sh --save-baseline
    open -a "Claude"
    ```
 
-2. 只读检查 `defaults read -g AppleLocale`。地区不是 `US` 时建议在「系统设置 → 通用 → 语言与地区」改为美国；界面语言不用改，时区不强制改，详见 `docs/account-safety.md`。
-3. 复述三条红线：不运行第二个 VPN；Clash 保持规则模式；订阅更新后增强文件通常仍生效，异常先跑 `scripts/verify.sh`。
+2. 只读检查 `defaults read -g AppleLocale`。地区不是 `US` 时，让用户在「系统设置 → 通用 → 语言与地区」将地区改为美国；界面语言不用改，时区不强制改，详见 `docs/account-safety.md`。
+3. 复述三条红线：不运行第二个 VPN；Clash 保持规则模式；订阅更新后增强文件通常仍生效，异常先跑 `scripts/verify.sh`。Clash Verge 可以开轻量模式，但必须确认内核和 TUN 仍在运行；日常必须先启动 Clash，再打开 Claude。
 4. 若当前会话由 bootstrap 启动（存在 `CLAUDE_LANE_COMPLETION_FILE`），完成前述收尾后最后执行 `/bin/bash scripts/bootstrap-complete.sh` 写入本次 deployment id 的非秘密完成标记，然后结束当前 DeepSeek 模式的 Claude Code 子进程；人工恢复流程不创建该标记。该标记不能代替 Phase 5，启动器还会独立重跑六项验证。子进程不能清除父进程环境；由启动器的 `trap` 清除 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_MODEL`、三个 `ANTHROPIC_DEFAULT_*_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`、`CLAUDE_CODE_EFFORT_LEVEL`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`CLAUDE_CODE_SKIP_PROMPT_HISTORY`、`DISABLE_LOGIN_COMMAND`、`DISABLE_AUTOUPDATER`、`CLAUDE_CONFIG_DIR`、临时 Key，以及本次临时配置、会话和日志。不得声称清理完成，直到启动器实际验证这些状态已消失。
 5. 启动器保留经过校验的 Claude Code 程序，但普通 `claude` 不得继续指向 DeepSeek。用不带临时变量的新进程确认进入正常 Claude 登录流程；**用户到这时才登录 Anthropic。**
-6. 用户在 claude.ai → 设置 → 帐户 → 活跃会话中撤销归属地不符的旧会话并重新登录。刷新后确认当前会话归属地与静态出口地区一致。
+6. 用户在 claude.ai → 设置 → 帐户 → 活跃会话中撤销归属地不符的旧会话并重新登录。刷新后确认当前会话归属地与静态出口地区一致。手机没有配好同等链式出口时不要在手机上使用 Claude；如果只为支付临时登录，支付完后立即从网页的活跃会话中撤销该手机设备。
+7. 打开 Claude → Settings → Privacy，确认 `Location metadata` 和 `Help improve our AI models` 两个开关都处于关闭状态。
+8. 提醒用户把机场和 ISP 的账号、续费日期和找回方式保存在自己的密码管理器中；不要记在本仓库、对话、脚本或明文笔记里。
 
 ## 回滚
 
@@ -205,6 +233,8 @@ bash scripts/bootstrap-selftest.sh
 - `scripts/verify.sh --save-baseline` 六项全绿。
 - bootstrap 已实际清除 DeepSeek 临时凭证、环境、配置、会话和日志；普通 `claude` 不再指向 DeepSeek。
 - 用户完成正常 Claude 登录，并在活跃会话中看到当前归属地与静态出口地区一致。
+- Claude 隐私页的 `Location metadata` 和 `Help improve our AI models` 都已关闭。
+- 用户已收到机场 / ISP 账号保管、手机设备和「先开 Clash，再开 Claude」的交付提醒。
 - 用户知道三条红线。
 
-最终只汇总打码后的静态出口、实际使用的美国节点、六项验证、DeepSeek 清理和登录状态；不得包含订阅链接、四元组或 Key。
+最终只汇总打码后的静态出口、实际使用的美国节点、六项验证、DeepSeek 清理、登录、隐私设置和交付提醒状态；不得包含订阅链接、四元组或 Key。

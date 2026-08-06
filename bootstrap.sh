@@ -10,24 +10,26 @@ umask 077
 BOOTSTRAP_VERSION="1"
 EXPECTED_SCHEMA="1"
 EXPECTED_LANE_VERSION="1.3.0"
-EXPECTED_CLAUDE_VERSION="2.1.212"
+EXPECTED_CLAUDE_VERSION="2.1.220"
 EXPECTED_CLASH_VERSION="2.5.2"
 EXPECTED_GPG_FINGERPRINT="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
 EXPECTED_CLAUDE_IDENTIFIER="com.anthropic.claude-code"
 EXPECTED_CLAUDE_TEAM_ID="Q6L2SF6YDW"
-EXPECTED_CLAUDE_ARM64_SHA="09ecba2ab2df9b6ee5b0695e26f65dea60fb3b6af3d3542ee09f466838d1e574"
-EXPECTED_CLAUDE_X86_SHA="7681a0634c89fa4474e53c0c794e992944aebf3409a7a2b87ea9f9b0194ea341"
-EXPECTED_CLAUDE_WIN_ARM64_SHA="adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5"
-EXPECTED_CLAUDE_WIN_X64_SHA="fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa"
+EXPECTED_CLAUDE_ARM64_SHA="8addc857f3fe64d5a0368af9ee50321b50afb4a6918ba3ef018ab84f5dbbe081"
+EXPECTED_CLAUDE_X86_SHA="dca7be0aa7d3d924836d440e0c6d8e3d47ef3c8e61fa5809b54b9017170ce2f3"
+EXPECTED_CLAUDE_WIN_ARM64_SHA="07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c"
+EXPECTED_CLAUDE_WIN_X64_SHA="af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231"
 EXPECTED_CLASH_ARM64_SHA="94d29405980b5d1d3419dd1de485db3a234d35cef058f79dcce595e01b697219"
 EXPECTED_CLASH_X86_SHA="c9fcec27d3e4b4fffe31f314369aaa4017d80c1293c8b1cb65d85de223e9cb6c"
 EXPECTED_CLASH_WIN_ARM64_SHA="973fafb5f154e541b34c1315f7de7440daf68d05f2e52fa08da2bcc71b6c3214"
 EXPECTED_CLASH_WIN_X64_SHA="ba42f00b1082e352352080170fe86ae411bcc854cb13f1b8bebc9025e8a7cbf4"
+CLAUDE_OFFICIAL_BASE_URL="https://downloads.claude.ai/claude-code-releases"
 
-# Release block. These values intentionally stay unusable until the two
-# domestic stores and the immutable stable manifest have passed release gates.
-PRIMARY_BASE_URL="https://TBD-PRIMARY.invalid"
-BACKUP_BASE_URL="https://TBD-BACKUP.invalid"
+# Release block. The primary URL is Alibaba OSS's own HTTPS hostname, so no
+# custom domain, CDN activation or ICP filing is required. Backup is optional
+# for the first release and can be added later without changing artifact paths.
+PRIMARY_BASE_URL="https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com"
+BACKUP_BASE_URL=""
 STABLE_MANIFEST_PATH="manifests/stable.json"
 STABLE_MANIFEST_SHA256="TBD"
 
@@ -49,6 +51,8 @@ DEPLOYMENT_ID=""
 INSTALLED_LANE=""
 INSTALLED_CLAUDE=""
 COMPLETION_FILE=""
+SUBSCRIPTION_STATE=""
+RESUME_MODE=0
 # 安装目标先写到同目录临时路径，校验后再原子改名；失败时只清理精确临时路径。
 PENDING_CLAUDE_INSTALL=""
 PENDING_LANE_INSTALL=""
@@ -80,7 +84,7 @@ claude-lane bootstrap.sh
   --help                  显示帮助
   --manifest-file <path>  仅专项测试注入；同时要求 CL_BOOT_TEST_MODE=1
 
-当前 stable 发布块尚未配置国内主备源、manifest 固定摘要和仓库包摘要，
+当前 stable 发布块尚未配置 manifest 固定摘要和仓库包摘要，
 正式运行会在下载或修改系统前失败关闭。
 EOF
 }
@@ -301,6 +305,7 @@ download_checked() {
   artifact_label=$4
 
   for artifact_base in "$PRIMARY_BASE_URL" "$BACKUP_BASE_URL"; do
+    [ -n "$artifact_base" ] || continue
     artifact_url=$(join_url "$artifact_base" "$artifact_path")
     artifact_part="${artifact_dest}.part"
     /bin/rm -f -- "$artifact_part" "$artifact_dest" 2>/dev/null || true
@@ -311,14 +316,14 @@ download_checked() {
         /bin/mv -- "$artifact_part" "$artifact_dest" || die "无法保存 ${artifact_label}"
         return 0
       fi
-      warn "${artifact_label} 摘要不一致，尝试备用源"
+      warn "${artifact_label} 摘要不一致，尝试下一个已配置国内源"
     else
-      warn "${artifact_label} 下载失败，尝试备用源"
+      warn "${artifact_label} 下载失败，尝试下一个已配置国内源"
     fi
   done
 
   /bin/rm -f -- "${artifact_dest}.part" "$artifact_dest" 2>/dev/null || true
-  die "${artifact_label} 的主备源均未通过下载与 SHA-256 校验"
+  die "${artifact_label} 的已配置国内源均未通过下载与 SHA-256 校验"
 }
 
 make_temp_dir() {
@@ -329,13 +334,18 @@ make_temp_dir() {
 }
 
 validate_release_block() {
-  for release_base in "$PRIMARY_BASE_URL" "$BACKUP_BASE_URL"; do
-    is_placeholder "$release_base" && die "国内主备下载源尚未发布，启动器保持失败关闭"
-    case "$release_base" in
+  is_placeholder "$PRIMARY_BASE_URL" && die "国内主下载源尚未发布，启动器保持失败关闭"
+  case "$PRIMARY_BASE_URL" in
+    https://*) ;;
+    *) die "主下载源必须使用 HTTPS" ;;
+  esac
+  if [ -n "$BACKUP_BASE_URL" ]; then
+    is_placeholder "$BACKUP_BASE_URL" && die "备用下载源仍是占位值"
+    case "$BACKUP_BASE_URL" in
       https://*) ;;
-      *) die "下载源必须使用 HTTPS" ;;
+      *) die "备用下载源必须使用 HTTPS" ;;
     esac
-  done
+  fi
   valid_sha256 "$STABLE_MANIFEST_SHA256" || die "stable manifest 的固定 SHA-256 尚未发布"
 }
 
@@ -369,17 +379,12 @@ validate_manifest() {
   lane_sha=$(manifest_get claude_lane.sha256) || die "manifest 缺少 claude_lane.sha256"
 
   claude_version=$(manifest_get claude_code.version) || die "manifest 缺少 claude_code.version"
+  claude_distribution=$(manifest_get claude_code.distribution) || die "manifest 缺少 Claude Code 分发方式"
   gpg_fingerprint=$(manifest_get claude_code.manifest_gpg_fingerprint) || die "manifest 缺少 Claude Code GPG 指纹"
-  claude_arm_path=$(manifest_get claude_code.darwin_arm64.path) || die "manifest 缺少 Claude Code arm64 路径"
   claude_arm_sha=$(manifest_get claude_code.darwin_arm64.sha256) || die "manifest 缺少 Claude Code arm64 摘要"
-  claude_x86_path=$(manifest_get claude_code.darwin_x86_64.path) || die "manifest 缺少 Claude Code x86_64 路径"
   claude_x86_sha=$(manifest_get claude_code.darwin_x86_64.sha256) || die "manifest 缺少 Claude Code x86_64 摘要"
-  claude_win_arm_path=$(manifest_get claude_code.win32_arm64.path) || die "manifest 缺少 Claude Code Windows arm64 路径"
   claude_win_arm_sha=$(manifest_get claude_code.win32_arm64.sha256) || die "manifest 缺少 Claude Code Windows arm64 摘要"
-  claude_win_x64_path=$(manifest_get claude_code.win32_x64.path) || die "manifest 缺少 Claude Code Windows x64 路径"
   claude_win_x64_sha=$(manifest_get claude_code.win32_x64.sha256) || die "manifest 缺少 Claude Code Windows x64 摘要"
-  claude_win_arm_status=$(manifest_get claude_code.win32_arm64.signature_status) || die "manifest 缺少 Claude Code Windows arm64 签名状态"
-  claude_win_x64_status=$(manifest_get claude_code.win32_x64.signature_status) || die "manifest 缺少 Claude Code Windows x64 签名状态"
 
   clash_version=$(manifest_get clash_verge.version) || die "manifest 缺少 Clash Verge 版本"
   clash_arm_path=$(manifest_get clash_verge.arm64.path) || die "manifest 缺少 Clash Verge arm64 路径"
@@ -397,6 +402,7 @@ validate_manifest() {
   [ "$release_status" = "released" ] || die "manifest 尚未达到 released 状态"
   [ "$lane_version" = "$EXPECTED_LANE_VERSION" ] || die "claude-lane 版本未固定为 $EXPECTED_LANE_VERSION"
   [ "$claude_version" = "$EXPECTED_CLAUDE_VERSION" ] || die "Claude Code 版本未固定为 $EXPECTED_CLAUDE_VERSION"
+  [ "$claude_distribution" = "anthropic-official-after-proxy" ] || die "Claude Code 必须在代理可用后从 Anthropic 官方源安装"
   [ "$clash_version" = "$EXPECTED_CLASH_VERSION" ] || die "Clash Verge 版本未固定为 $EXPECTED_CLASH_VERSION"
 
   printf '%s' "$minimum_macos" | LC_ALL=C /usr/bin/grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || die "minimum_macos 格式无效"
@@ -407,10 +413,6 @@ validate_manifest() {
   valid_relative_path "$lane_path" || die "claude-lane 路径无效或仍是占位值"
   printf '%s' "$lane_root" | LC_ALL=C /usr/bin/grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$' || die "archive_root 无效"
   valid_sha256 "$lane_sha" || die "claude-lane SHA-256 尚未发布或格式无效"
-  valid_relative_path "$claude_arm_path" || die "Claude Code arm64 路径无效"
-  valid_relative_path "$claude_x86_path" || die "Claude Code x86_64 路径无效"
-  valid_relative_path "$claude_win_arm_path" || die "Claude Code Windows arm64 路径无效"
-  valid_relative_path "$claude_win_x64_path" || die "Claude Code Windows x64 路径无效"
   valid_relative_path "$clash_arm_path" || die "Clash Verge arm64 路径无效"
   valid_relative_path "$clash_x86_path" || die "Clash Verge x86_64 路径无效"
   valid_relative_path "$clash_win_arm_path" || die "Clash Verge Windows arm64 路径无效"
@@ -425,10 +427,14 @@ validate_manifest() {
   [ "$(printf '%s' "$clash_x86_sha" | lowercase)" = "$EXPECTED_CLASH_X86_SHA" ] || die "Clash Verge x86_64 摘要不匹配固定基线"
   [ "$(printf '%s' "$clash_win_arm_sha" | lowercase)" = "$EXPECTED_CLASH_WIN_ARM64_SHA" ] || die "Clash Verge Windows arm64 摘要不匹配固定基线"
   [ "$(printf '%s' "$clash_win_x64_sha" | lowercase)" = "$EXPECTED_CLASH_WIN_X64_SHA" ] || die "Clash Verge Windows x64 摘要不匹配固定基线"
-  [ "$claude_win_arm_status" = "verified-authenticode" ] || die "Claude Code Windows arm64 尚未通过真实 Windows 签名验证"
-  [ "$claude_win_x64_status" = "verified-authenticode" ] || die "Claude Code Windows x64 尚未通过真实 Windows 签名验证"
-  [ "$clash_win_arm_status" = "verified-authenticode" ] || die "Clash Verge Windows arm64 尚未通过真实 Windows 签名验证"
-  [ "$clash_win_x64_status" = "verified-authenticode" ] || die "Clash Verge Windows x64 尚未通过真实 Windows 签名验证"
+  case "$clash_win_arm_status" in
+    verified-tauri-minisign-runtime-authenticode) ;;
+    *) die "Clash Verge Windows arm64 尚未通过固定摘要与上游 Tauri minisign 验证" ;;
+  esac
+  case "$clash_win_x64_status" in
+    verified-tauri-minisign-runtime-authenticode) ;;
+    *) die "Clash Verge Windows x64 尚未通过固定摘要与上游 Tauri minisign 验证" ;;
+  esac
 }
 
 detect_platform() {
@@ -451,15 +457,15 @@ detect_platform() {
   case "$machine_name" in
     arm64)
       ARTIFACT_ARCH="arm64"
-      claude_path=$claude_arm_path
       claude_sha=$claude_arm_sha
+      claude_platform="darwin-arm64"
       clash_path=$clash_arm_path
       clash_sha=$clash_arm_sha
       ;;
     x86_64)
       ARTIFACT_ARCH="x86_64"
-      claude_path=$claude_x86_path
       claude_sha=$claude_x86_sha
+      claude_platform="darwin-x64"
       clash_path=$clash_x86_path
       clash_sha=$clash_x86_sha
       ;;
@@ -561,20 +567,10 @@ validate_archive() {
   ' "$verbose_file" || die "claude-lane 归档含符号链接或硬链接，拒绝解压"
 }
 
-stage_artifacts() {
+stage_domestic_artifacts() {
   make_temp_dir
-  STAGED_CLAUDE="$BOOT_TMP/claude"
   STAGED_ARCHIVE="$BOOT_TMP/claude-lane.tar.gz"
   STAGED_EXTRACT="$BOOT_TMP/extracted"
-
-  download_checked "$claude_path" "$claude_sha" "$STAGED_CLAUDE" "Claude Code $claude_version"
-  /bin/chmod 755 "$STAGED_CLAUDE" || die "无法设置 Claude Code 执行权限"
-  verify_executable_signature "$STAGED_CLAUDE" "Claude Code"
-
-  claude_version_output=$(
-    "$STAGED_CLAUDE" --version 2>/dev/null | /usr/bin/head -n 1
-  ) || die "无法读取 Claude Code 版本"
-  printf '%s' "$claude_version_output" | /usr/bin/grep -Fq "$EXPECTED_CLAUDE_VERSION" || die "Claude Code 实际版本与 manifest 不一致"
 
   download_checked "$lane_path" "$lane_sha" "$STAGED_ARCHIVE" "claude-lane $lane_version"
   validate_archive "$STAGED_ARCHIVE"
@@ -590,13 +586,46 @@ stage_artifacts() {
   for required_release_file in \
     scripts/backup.sh scripts/rollback.sh scripts/selftest.sh scripts/verify.sh \
     scripts/set-credentials.sh scripts/profile-config.sh scripts/macos-json.js \
-    scripts/bootstrap-complete.sh templates/1-proxies.yaml templates/2-groups.yaml \
+    scripts/bootstrap-complete.sh scripts/setup-state.sh scripts/subscription-checkpoint.sh \
+    templates/1-proxies.yaml templates/2-groups.yaml \
     templates/3-rules.yaml templates/4-merge.yaml templates/optional-payment-rules.yaml \
     docs/troubleshooting.md docs/account-safety.md docs/porting.md; do
     [ -f "$STAGED_LANE/$required_release_file" ] || die "归档缺少运行必需文件：$required_release_file"
   done
   archive_version=$(/usr/bin/awk 'NR==1 {gsub(/[[:space:]]/,""); print; exit}' "$STAGED_LANE/VERSION")
   [ "$archive_version" = "$lane_version" ] || die "归档内 VERSION 与 manifest 不一致"
+}
+
+stage_official_claude() {
+  make_temp_dir
+  controlled_claude="$HOME/Library/Application Support/claude-lane/tools/claude-code/$claude_version/claude"
+  if [ -f "$controlled_claude" ] && [ ! -L "$controlled_claude" ]; then
+    controlled_sha=$(sha256_file "$controlled_claude" 2>/dev/null || true)
+    [ "$(printf '%s' "$controlled_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || die "受控目录已有不同 Claude Code，拒绝覆盖"
+    verify_executable_signature "$controlled_claude" "已安装 Claude Code"
+    STAGED_CLAUDE="$controlled_claude"
+  else
+    STAGED_CLAUDE="$BOOT_TMP/claude"
+    official_claude_url="$CLAUDE_OFFICIAL_BASE_URL/$claude_version/$claude_platform/claude"
+    official_part="${STAGED_CLAUDE}.part"
+    /bin/rm -f -- "$official_part" "$STAGED_CLAUDE" 2>/dev/null || true
+    say "机场订阅已就绪；从 Anthropic 官方源下载固定版 Claude Code $claude_version"
+    download_url "$official_claude_url" "$official_part" || {
+      /bin/rm -f -- "$official_part" 2>/dev/null || true
+      die "无法通过当前代理访问 Anthropic 官方 Claude Code 下载地址"
+    }
+    official_sha=$(sha256_file "$official_part" 2>/dev/null || true)
+    [ "$(printf '%s' "$official_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || {
+      /bin/rm -f -- "$official_part" 2>/dev/null || true
+      die "Anthropic 官方 Claude Code 下载文件 SHA-256 不匹配"
+    }
+    /bin/mv -- "$official_part" "$STAGED_CLAUDE" || die "无法保存 Claude Code"
+    /bin/chmod 755 "$STAGED_CLAUDE" || die "无法设置 Claude Code 执行权限"
+    verify_executable_signature "$STAGED_CLAUDE" "Claude Code"
+  fi
+
+  claude_version_output=$("$STAGED_CLAUDE" --version 2>/dev/null | /usr/bin/head -n 1) || die "无法读取 Claude Code 版本"
+  printf '%s' "$claude_version_output" | /usr/bin/grep -Fq "$EXPECTED_CLAUDE_VERSION" || die "Claude Code 实际版本与固定 stable 版本不一致"
 }
 
 preflight_claude_cli() {
@@ -725,7 +754,7 @@ run_handshake() {
       --output-format json --no-session-persistence --setting-sources "" --strict-mcp-config \
       --permission-mode dontAsk --tools "" ${handshake_turn_args[@]+"${handshake_turn_args[@]}"} \
       '只回复 CLAUDE_LANE_HANDSHAKE_OK，不要调用工具。'
-  ) || die "DeepSeek 文本握手失败或超时；未安装 Clash Verge"
+  ) || die "DeepSeek 文本握手失败或超时；不会启动部署 Agent"
   /usr/bin/grep -Fq 'CLAUDE_LANE_HANDSHAKE_OK' "$handshake_out" || die "DeepSeek 文本握手返回值不符合预期"
 
   (
@@ -736,7 +765,7 @@ run_handshake() {
       --permission-mode dontAsk --tools "Read" \
       --allowedTools "Read($STAGED_LANE/VERSION)" ${read_turn_args[@]+"${read_turn_args[@]}"} \
       '必须用 Read 工具读取当前目录 VERSION；若内容是 1.3.0，只回复 CLAUDE_LANE_READ_OK:1.3.0。'
-  ) || die "DeepSeek 只读工具握手失败或超时；未安装 Clash Verge"
+  ) || die "DeepSeek 只读工具握手失败或超时；不会启动部署 Agent"
   /usr/bin/grep -Fq 'CLAUDE_LANE_READ_OK:1.3.0' "$read_out" || die "DeepSeek 只读工具握手返回值不符合预期"
 
   # 第三步：实测 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 是否真的生效。
@@ -768,7 +797,7 @@ PROBE
       --permission-mode dontAsk --tools "Bash" \
       --allowedTools "Bash(bash $scrub_probe)" ${read_turn_args[@]+"${read_turn_args[@]}"} \
       "必须用 Bash 工具原样执行命令 bash $scrub_probe，然后只回复它输出的那一行。"
-  ) || die "DeepSeek 子进程环境探测失败或超时；未安装 Clash Verge"
+  ) || die "DeepSeek 子进程环境探测失败或超时；不会启动部署 Agent"
   if /usr/bin/grep -Fq 'CLAUDE_LANE_SCRUB_LEAK' "$scrub_out"; then
     die "固定版 Claude Code 未实现 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB：Bash 工具的子进程仍继承 DeepSeek Key，按失败关闭中止"
   fi
@@ -778,31 +807,12 @@ PROBE
   say "DeepSeek 文本、只读工具与子进程环境隔离握手均通过"
 }
 
-install_claude_and_lane() {
-  tools_root="$HOME/Library/Application Support/claude-lane/tools/claude-code/$claude_version"
-  installed_claude="$tools_root/claude"
+install_lane() {
   release_parent="$HOME/Library/Application Support/claude-lane/releases"
   release_target="$release_parent/v$lane_version"
   current_link="$HOME/Library/Application Support/claude-lane/current"
 
-  /bin/mkdir -p "$tools_root" "$release_parent" || die "无法创建 claude-lane 安装目录"
-
-  if [ -e "$installed_claude" ]; then
-    installed_sha=$(sha256_file "$installed_claude" 2>/dev/null || true)
-    [ "$(printf '%s' "$installed_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || die "受控目录已有不同 Claude Code，拒绝覆盖"
-    verify_executable_signature "$installed_claude" "已安装 Claude Code"
-  else
-    PENDING_CLAUDE_INSTALL="$tools_root/.claude.installing.$$"
-    [ ! -e "$PENDING_CLAUDE_INSTALL" ] && [ ! -L "$PENDING_CLAUDE_INSTALL" ] || die "Claude Code 临时安装路径已存在"
-    /usr/bin/ditto "$STAGED_CLAUDE" "$PENDING_CLAUDE_INSTALL" || die "无法暂存 Claude Code"
-    /bin/chmod 755 "$PENDING_CLAUDE_INSTALL" || die "无法设置暂存 Claude Code 权限"
-    installed_sha=$(sha256_file "$PENDING_CLAUDE_INSTALL" 2>/dev/null || true)
-    [ "$(printf '%s' "$installed_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || die "安装后的 Claude Code 摘要不一致"
-    verify_executable_signature "$PENDING_CLAUDE_INSTALL" "暂存 Claude Code"
-    [ ! -e "$installed_claude" ] && [ ! -L "$installed_claude" ] || die "Claude Code 正式路径在安装期间被占用"
-    /bin/mv -- "$PENDING_CLAUDE_INSTALL" "$installed_claude" || die "无法原子启用 Claude Code"
-    PENDING_CLAUDE_INSTALL=""
-  fi
+  /bin/mkdir -p "$release_parent" || die "无法创建 claude-lane 安装目录"
 
   if [ -e "$release_target" ]; then
     [ -d "$release_target" ] || die "版本目录已存在但不是目录，拒绝覆盖"
@@ -825,8 +835,32 @@ install_claude_and_lane() {
     warn "保留已有 current 入口；本次直接使用 $release_target"
   fi
 
-  INSTALLED_CLAUDE="$installed_claude"
   INSTALLED_LANE="$release_target"
+}
+
+install_claude() {
+  tools_root="$HOME/Library/Application Support/claude-lane/tools/claude-code/$claude_version"
+  installed_claude="$tools_root/claude"
+  /bin/mkdir -p "$tools_root" || die "无法创建 Claude Code 安装目录"
+
+  if [ -e "$installed_claude" ]; then
+    installed_sha=$(sha256_file "$installed_claude" 2>/dev/null || true)
+    [ "$(printf '%s' "$installed_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || die "受控目录已有不同 Claude Code，拒绝覆盖"
+    verify_executable_signature "$installed_claude" "已安装 Claude Code"
+  else
+    PENDING_CLAUDE_INSTALL="$tools_root/.claude.installing.$$"
+    [ ! -e "$PENDING_CLAUDE_INSTALL" ] && [ ! -L "$PENDING_CLAUDE_INSTALL" ] || die "Claude Code 临时安装路径已存在"
+    /usr/bin/ditto "$STAGED_CLAUDE" "$PENDING_CLAUDE_INSTALL" || die "无法暂存 Claude Code"
+    /bin/chmod 755 "$PENDING_CLAUDE_INSTALL" || die "无法设置暂存 Claude Code 权限"
+    installed_sha=$(sha256_file "$PENDING_CLAUDE_INSTALL" 2>/dev/null || true)
+    [ "$(printf '%s' "$installed_sha" | lowercase)" = "$(printf '%s' "$claude_sha" | lowercase)" ] || die "安装后的 Claude Code 摘要不一致"
+    verify_executable_signature "$PENDING_CLAUDE_INSTALL" "暂存 Claude Code"
+    [ ! -e "$installed_claude" ] && [ ! -L "$installed_claude" ] || die "Claude Code 正式路径在安装期间被占用"
+    /bin/mv -- "$PENDING_CLAUDE_INSTALL" "$installed_claude" || die "无法原子启用 Claude Code"
+    PENDING_CLAUDE_INSTALL=""
+  fi
+  INSTALLED_CLAUDE="$installed_claude"
+  STAGED_CLAUDE="$installed_claude"
 }
 
 plist_mount_point() {
@@ -912,6 +946,59 @@ install_or_validate_clash() {
   say "Clash Verge Rev $clash_version 已安装并打开"
 }
 
+set_setup_progress() {
+  progress_state=$1
+  progress_reason=$2
+  [ -n "$INSTALLED_LANE" ] && [ -f "$INSTALLED_LANE/scripts/setup-state.sh" ] || die "安装包缺少进度状态工具"
+  /bin/bash "$INSTALLED_LANE/scripts/setup-state.sh" set "$progress_state" "$progress_reason" >/dev/null || die "无法保存安装进度"
+}
+
+run_subscription_checkpoint() {
+  [ -n "$INSTALLED_LANE" ] && [ -f "$INSTALLED_LANE/scripts/subscription-checkpoint.sh" ] || die "安装包缺少订阅检查点"
+  checkpoint_output="$BOOT_TMP/subscription-checkpoint.txt"
+  /bin/bash "$INSTALLED_LANE/scripts/subscription-checkpoint.sh" >"$checkpoint_output" 2>&1 || {
+    /bin/cat "$checkpoint_output" >&2
+    die "无法安全判断 Clash Verge 订阅状态"
+  }
+  /bin/cat "$checkpoint_output"
+  SUBSCRIPTION_STATE=$(/usr/bin/awk -F= '/^SETUP_STATE=/{print $2; exit}' "$checkpoint_output")
+  case "$SUBSCRIPTION_STATE" in
+    SUBSCRIPTION_IMPORTED) return 0 ;;
+    WAITING_FOR_SUBSCRIPTION)
+      say "Clash Verge 已安装；当前正常暂停在“等待机场订阅”。"
+      say "请在 Clash Verge → 订阅中粘贴你的订阅链接并更新；不要把链接发给 Agent。"
+      say "完成后重新运行同一条 bootstrap 命令，安装器会从这个检查点继续。"
+      return 20
+      ;;
+    *) die "订阅检查点返回未知状态" ;;
+  esac
+}
+
+resume_installed_checkpoint() {
+  progress_file="$HOME/Library/Application Support/claude-lane/setup-progress.json"
+  [ -e "$progress_file" ] || return 2
+  [ -f "$progress_file" ] && [ ! -L "$progress_file" ] || die "安装进度文件类型不安全"
+  progress_state=$(/usr/bin/plutil -extract state raw -o - "$progress_file" 2>/dev/null) || die "安装进度文件损坏"
+  [ "$progress_state" = "WAITING_FOR_SUBSCRIPTION" ] || return 2
+
+  INSTALLED_LANE="$HOME/Library/Application Support/claude-lane/releases/v$lane_version"
+  [ -f "$INSTALLED_LANE/VERSION" ] && [ "$(/usr/bin/head -n 1 "$INSTALLED_LANE/VERSION")" = "$lane_version" ] || die "续跑所需的固定版 claude-lane 缺失"
+  [ -d "/Applications/Clash Verge.app" ] || die "续跑时未找到 Clash Verge"
+  verify_app_signature "/Applications/Clash Verge.app" "续跑 Clash Verge"
+
+  # 本地 VERSION 不能证明运行脚本未被修改。续跑只重下体积很小的 lane
+  # 归档并逐项比对；Clash 安装包不重复下载，任何本地漂移都失败关闭。
+  stage_domestic_artifacts
+  if /usr/bin/find "$INSTALLED_LANE" \( -type l -o \( -type f -links +1 \) \) -print 2>/dev/null | /usr/bin/grep -q .; then
+    die "续跑的 claude-lane 目录含符号链接或硬链接"
+  fi
+  /usr/bin/diff -qr "$STAGED_LANE" "$INSTALLED_LANE" >/dev/null 2>&1 || die "续跑的 claude-lane 内容与固定归档不一致"
+  RESUME_MODE=1
+  /usr/bin/open "/Applications/Clash Verge.app" || die "无法打开 Clash Verge"
+  run_subscription_checkpoint
+  return $?
+}
+
 run_interactive_agent() {
   DEPLOYMENT_ID=$(/bin/date +%Y%m%d-%H%M%S)
   completion_dir="$HOME/Library/Application Support/claude-lane/bootstrap-status"
@@ -936,6 +1023,7 @@ run_interactive_agent() {
       --allowedTools "Bash(scutil --nc list)" \
       --allowedTools "Bash(pgrep -fl verge-mihomo)" \
       --allowedTools "Bash(defaults read -g AppleLocale)" \
+      --allowedTools "Bash(/bin/bash scripts/setup-state.sh set *)" \
       --allowedTools "Bash(/bin/bash scripts/bootstrap-complete.sh)" \
       "$agent_prompt" </dev/tty >/dev/tty 2>/dev/tty
   )
@@ -978,6 +1066,7 @@ verify_independently() {
     cd "$INSTALLED_LANE" || exit 1
     /bin/bash scripts/verify.sh --save-baseline
   ) </dev/tty >/dev/tty 2>/dev/tty; then
+    set_setup_progress VALIDATION_PASSED validation_passed
     /bin/rm -f -- "$COMPLETION_FILE" 2>/dev/null || true
     COMPLETION_FILE=""
     return 0
@@ -1021,6 +1110,7 @@ start_normal_claude() {
   ) </dev/tty >/dev/tty 2>/dev/tty
   normal_status=$?
   [ "$normal_status" = "0" ] || die "专线已验证，但普通 Claude 登录流程未正常结束"
+  set_setup_progress COMPLETED completed
 }
 
 main() {
@@ -1040,18 +1130,42 @@ main() {
   require_tty
   make_temp_dir
 
+  resume_installed_checkpoint
+  resume_status=$?
+  case "$resume_status" in
+    0) say "检测到已安装组件和已导入订阅；从订阅检查点继续" ;;
+    20) return 0 ;;
+    2) ;;
+    *) die "无法恢复安装进度" ;;
+  esac
+
   if [ -e "/Applications/Clash Verge.app" ]; then
     say "检测到现有 /Applications/Clash Verge.app；后续只校验并保留，不覆盖"
   fi
   existing_claude=$(command -v claude 2>/dev/null || true)
   if [ -n "$existing_claude" ]; then
-    say "检测到现有 Claude 命令：${existing_claude}；本次使用隔离的固定版，不覆盖"
+    say "检测到现有 Claude 命令：${existing_claude}；代理可用后将安装隔离固定版，不覆盖现有命令"
   fi
 
-  stage_artifacts
+  if [ "$RESUME_MODE" != "1" ]; then
+    stage_domestic_artifacts
+    install_lane
+    install_or_validate_clash
+    set_setup_progress CLASH_INSTALLED clash_installed
+    run_subscription_checkpoint
+    checkpoint_status=$?
+    case "$checkpoint_status" in
+      0) ;;
+      20) return 0 ;;
+      *) die "订阅检查点失败" ;;
+    esac
+  fi
+
+  # 这条官方请求只能出现在订阅检查点之后。无订阅的首次运行在上面
+  # 正常退出，因此不会访问 Anthropic 或任何其他海外下载源。
+  stage_official_claude
+  install_claude
   run_handshake
-  install_claude_and_lane
-  install_or_validate_clash
   run_interactive_agent
   verify_independently
   install_normal_entry_if_safe

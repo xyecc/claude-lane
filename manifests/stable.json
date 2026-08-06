@@ -2,96 +2,84 @@
   "schema": 1,
   "release_status": "blocked",
   "release_blockers": [
-    "Claude Code darwin-x64 version execution has not run on a native Intel Mac",
-    "Windows x64 and ARM64 Authenticode verification has not run on real Windows hosts",
-    "a second domestic storage failure domain is not configured",
-    "the private OSS bucket has no controlled stable download gateway",
-    "Claude Code public redistribution authorization has not been established for this release"
+    "the updated claude-lane runtime archives have not been built from a clean reviewed commit",
+    "macOS Intel and Windows x64/ARM64 end-to-end installation have not run",
+    "stable bootstrap entry objects have not been uploaded and re-downloaded"
   ],
   "minimum_macos": "13.0",
   "minimum_windows": "10.0.17763",
   "required_free_mb": 2048,
   "distribution": {
-    "mode": "private-controlled-cache",
+    "mode": "public-clash-and-lane-primary-only",
     "primary": {
       "provider": "alibaba-oss",
-      "base_url": "TBD",
-      "anonymous_download": false,
-      "status": "upload-authorized"
+      "base_url": "https://claude-lane-release-prod-20260802-k7m3q9.oss-cn-beijing.aliyuncs.com",
+      "anonymous_download": true,
+      "status": "verified-public-read"
     },
     "backup": {
-      "provider": "TBD",
-      "base_url": "TBD",
-      "status": "waiting-configuration"
+      "enabled": false,
+      "provider": "deferred-by-maintainer",
+      "base_url": "",
+      "status": "not-configured"
     },
-    "synchronized_at": "TBD"
+    "synchronized_at": "2026-08-06T13:05:36Z"
   },
   "claude_lane": {
     "version": "1.3.0",
     "path": "claude-lane/releases/v1.3.0/claude-lane.tar.gz",
     "windows_path": "claude-lane/releases/v1.3.0/claude-lane.zip",
     "archive_root": "claude-lane-1.3.0",
-    "sha256": "2b7102d0d850d2f0375c7a7f9715cbe155deb5f41e5fc7dc7d85b8991cca5053",
-    "windows_sha256": "b77f1c8bc6d2fe7c5dfb02b881787778f48e87c3fcdefe67fe4c264fe090077d"
+    "sha256": "TBD",
+    "windows_sha256": "TBD"
   },
   "claude_code": {
-    "version": "2.1.212",
-    "official_release_url": "https://downloads.claude.ai/claude-code-releases/2.1.212",
-    "official_released_at": "2026-07-16T16:50:33Z",
-    "upstream_fetched_at": "2026-08-02T08:43:00Z",
+    "version": "2.1.220",
+    "distribution": "anthropic-official-after-proxy",
+    "official_release_url": "https://downloads.claude.ai/claude-code-releases/2.1.220",
+    "official_released_at": "2026-07-24T22:28:51Z",
+    "stable_channel_checked_at": "2026-08-06T00:00:00Z",
     "manifest_gpg_fingerprint": "31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE",
     "manifest": {
-      "path": "claude-code/releases/2.1.212/manifest.json",
-      "size": 1872,
-      "sha256": "9d7f44f9b7f6fc7e935eff709f001c4ca66faef63306a1b608aea9ab4ffe842c",
-      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/manifest.json",
-      "signature_path": "claude-code/releases/2.1.212/manifest.json.sig",
+      "size": 1974,
+      "sha256": "40f281ff188f1cd4f39309da41a219014dad2555d96e9780c67a2138720d12ed",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/manifest.json",
       "signature_size": 833,
-      "signature_sha256": "2e8e8d9af306e6454f645537cc1773b05681ebdfc335e76e0e20c20eeb6575a2",
-      "signature_official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/manifest.json.sig",
+      "signature_sha256": "63ed32a9d1b382728ea3855a62aaf7ad19d2c7bdcb3eae91959f5bb1e316c99f",
+      "signature_official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/manifest.json.sig",
       "signature_status": "verified"
     },
     "darwin_arm64": {
       "os": "macos",
       "arch": "arm64",
-      "path": "claude-code/releases/2.1.212/claude-darwin-arm64",
-      "size": 244530512,
-      "sha256": "09ecba2ab2df9b6ee5b0695e26f65dea60fb3b6af3d3542ee09f466838d1e574",
-      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/darwin-arm64/claude",
-      "signature_status": "verified-codesign-and-native-version",
-      "gatekeeper_status": "not-app-bundle-code-valid",
-      "signer": "Anthropic PBC",
-      "team_id": "Q6L2SF6YDW"
+      "size": 256908272,
+      "sha256": "8addc857f3fe64d5a0368af9ee50321b50afb4a6918ba3ef018ab84f5dbbe081",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/darwin-arm64/claude",
+      "signature_status": "verified-signed-manifest-runtime-codesign"
     },
     "darwin_x86_64": {
       "os": "macos",
       "arch": "x86_64",
-      "path": "claude-code/releases/2.1.212/claude-darwin-x64",
-      "size": 254080272,
-      "sha256": "7681a0634c89fa4474e53c0c794e992944aebf3409a7a2b87ea9f9b0194ea341",
-      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/darwin-x64/claude",
-      "signature_status": "verified-codesign-version-pending-intel",
-      "gatekeeper_status": "not-app-bundle-code-valid",
-      "signer": "Anthropic PBC",
-      "team_id": "Q6L2SF6YDW"
+      "size": 266397712,
+      "sha256": "dca7be0aa7d3d924836d440e0c6d8e3d47ef3c8e61fa5809b54b9017170ce2f3",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/darwin-x64/claude",
+      "signature_status": "verified-signed-manifest-runtime-codesign"
     },
     "win32_arm64": {
       "os": "windows",
       "arch": "arm64",
-      "path": "claude-code/releases/2.1.212/claude-win32-arm64.exe",
-      "size": 249684640,
-      "sha256": "adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5",
-      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/win32-arm64/claude.exe",
-      "signature_status": "verified-manifest-sha256-pending-windows-authenticode"
+      "size": 260095648,
+      "sha256": "07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/win32-arm64/claude.exe",
+      "signature_status": "verified-signed-manifest-runtime-authenticode"
     },
     "win32_x64": {
       "os": "windows",
       "arch": "x86_64",
-      "path": "claude-code/releases/2.1.212/claude-win32-x64.exe",
-      "size": 255334560,
-      "sha256": "fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa",
-      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.212/win32-x64/claude.exe",
-      "signature_status": "verified-manifest-sha256-pending-windows-authenticode"
+      "size": 265720480,
+      "sha256": "af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231",
+      "official_url": "https://downloads.claude.ai/claude-code-releases/2.1.220/win32-x64/claude.exe",
+      "signature_status": "verified-signed-manifest-runtime-authenticode"
     }
   },
   "clash_verge": {
@@ -135,8 +123,7 @@
       "signature_path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe.sig",
       "signature_size": 424,
       "signature_sha256": "fdefd873e0be4b29165c7698e780bfbb8d544fd40c57a52291880f8d7bcfab39",
-      "signature_official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_arm64-setup.exe.sig",
-      "signature_status": "verified-tauri-minisign-pending-windows-authenticode"
+      "signature_status": "verified-tauri-minisign-runtime-authenticode"
     },
     "win32_x64": {
       "os": "windows",
@@ -148,8 +135,7 @@
       "signature_path": "clash-verge/releases/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe.sig",
       "signature_size": 424,
       "signature_sha256": "972f7070b0eeaa7e4e9f685b38bed433bb4f2c45b9b93957c46968bacb148ea0",
-      "signature_official_url": "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v2.5.2/Clash.Verge_2.5.2_x64-setup.exe.sig",
-      "signature_status": "verified-tauri-minisign-pending-windows-authenticode"
+      "signature_status": "verified-tauri-minisign-runtime-authenticode"
     }
   }
 }

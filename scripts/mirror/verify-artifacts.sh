@@ -39,7 +39,6 @@ CLAUDE_VERSION=$(/usr/bin/plutil -extract claude_code.version raw -o - "$MIRROR_
 CLASH_VERSION=$(/usr/bin/plutil -extract clash_verge.version raw -o - "$MIRROR_REPO_ROOT/manifests/stable.json") || mirror_die "missing Clash version"
 CLAUDE_DIR="$MIRROR_WORK_DIR/claude-code/releases/$CLAUDE_VERSION"
 CLASH_DIR="$MIRROR_WORK_DIR/clash-verge/releases/v$CLASH_VERSION"
-PUBLISHER_ARCH=$(/usr/bin/uname -m)
 MANIFEST="$CLAUDE_DIR/manifest.json"
 MANIFEST_SIG="$CLAUDE_DIR/manifest.json.sig"
 PUBLIC_KEY="$CLAUDE_DIR/audit/claude-code.asc"
@@ -60,32 +59,9 @@ GNUPGHOME="$GNUPG_HOME" gpg --batch --verify "$MANIFEST_SIG" "$MANIFEST" >"$CLAU
 for platform in darwin-arm64 darwin-x64 win32-arm64 win32-x64; do
   checksum=$(/usr/bin/plutil -extract "platforms.${platform}.checksum" raw -o - "$MANIFEST") || mirror_die "manifest missing $platform"
   size=$(/usr/bin/plutil -extract "platforms.${platform}.size" raw -o - "$MANIFEST") || mirror_die "manifest missing size"
-  case "$platform" in
-    darwin-arm64) file="$CLAUDE_DIR/claude-darwin-arm64" ;;
-    darwin-x64) file="$CLAUDE_DIR/claude-darwin-x64" ;;
-    win32-arm64) file="$CLAUDE_DIR/claude-win32-arm64.exe" ;;
-    win32-x64) file="$CLAUDE_DIR/claude-win32-x64.exe" ;;
-  esac
-  [ -f "$file" ] || mirror_die "missing Claude artifact: $file"
-  [ "$(mirror_sha256 "$file")" = "$checksum" ] || mirror_die "Claude hash mismatch: $platform"
-  [ "$(mirror_size "$file")" = "$size" ] || mirror_die "Claude size mismatch: $platform"
-  case "$platform" in
-    darwin-*)
-      /usr/bin/codesign --verify --strict --verbose=2 "$file" >/dev/null 2>&1 || mirror_die "Claude codesign failed: $platform"
-      signature_info=$(/usr/bin/codesign -d --verbose=4 "$file" 2>&1) || mirror_die "cannot read Claude identity"
-      printf '%s\n' "$signature_info" >"$CLAUDE_DIR/audit/codesign-${platform}.txt"
-      printf '%s\n' "$signature_info" | /usr/bin/grep -Fqx 'Identifier=com.anthropic.claude-code' || mirror_die "Claude identifier mismatch"
-      printf '%s\n' "$signature_info" | /usr/bin/grep -Fqx 'TeamIdentifier=Q6L2SF6YDW' || mirror_die "Claude Team ID mismatch"
-      /usr/sbin/spctl --assess --type execute --verbose=4 "$file" >"$CLAUDE_DIR/audit/spctl-${platform}.txt" 2>&1 || true
-      if { [ "$platform" = darwin-arm64 ] && [ "$PUBLISHER_ARCH" = arm64 ]; } ||
-         { [ "$platform" = darwin-x64 ] && [ "$PUBLISHER_ARCH" = x86_64 ]; }; then
-        "$file" --version 2>/dev/null | /usr/bin/head -n 1 | /usr/bin/grep -Fq "$CLAUDE_VERSION" || mirror_die "Claude version mismatch"
-      else
-        mirror_say "pending native-host version execution: Claude $platform"
-      fi
-      ;;
-  esac
-  mirror_say "verified Claude $platform: $checksum"
+  mirror_valid_sha256 "$checksum" || mirror_die "Claude manifest checksum invalid: $platform"
+  printf '%s' "$size" | LC_ALL=C /usr/bin/grep -Eq '^[0-9]+$' || mirror_die "Claude manifest size invalid: $platform"
+  mirror_say "verified signed Claude metadata $platform: $checksum"
 done
 
 TAURI_PUBLIC_B64='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyOEMyRjBCQkVGOUJEREYKUldUZnZmbStDeStNMHU5Mmo1N24xQXZwSVRYbXA2NUpzZE5oVzlqeS9Bc0t6RVV4MmtwVjBZaHgK'
@@ -143,5 +119,5 @@ done
 
 [ -f "$CLASH_DIR/LICENSE" ] && /usr/bin/grep -Fq 'GNU GENERAL PUBLIC LICENSE' "$CLASH_DIR/LICENSE" || mirror_die "Clash GPL license missing"
 [ -f "$CLASH_DIR/SOURCE.txt" ] && /usr/bin/grep -Fq "tree/v$CLASH_VERSION" "$CLASH_DIR/SOURCE.txt" || mirror_die "Clash source metadata missing"
-mirror_say "macOS and upstream signature verification complete"
-mirror_say "pending: run verify-artifacts.ps1 on real Windows x64 and ARM64 hosts"
+mirror_say "Clash macOS and upstream Tauri signature verification complete"
+mirror_say "Claude runtime codesign/Authenticode is enforced after proxy download on each target host"

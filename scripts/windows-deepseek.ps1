@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
 $InstallRoot = Join-Path $env:LOCALAPPDATA "claude-lane"
-$ClaudePath = Join-Path $InstallRoot "tools\claude-code\2.1.212\claude.exe"
+$ClaudePath = Join-Path $InstallRoot "tools\claude-code\2.1.220\claude.exe"
 $LaneRoot = Join-Path $InstallRoot "releases\v1.3.0"
 $TempConfig = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-deepseek-" + [guid]::NewGuid().ToString("N"))
 $ChildProcess = $null
@@ -120,13 +120,13 @@ function Get-SafeDiagnostic([string]$Text, [string]$Secret) {
 }
 
 try {
-    if (-not (Test-Path -LiteralPath $ClaudePath -PathType Leaf)) { Stop-DeepSeek "未找到受控 Claude Code，请先运行 windows-local-rc.ps1" }
+    if (-not (Test-Path -LiteralPath $ClaudePath -PathType Leaf)) { Stop-DeepSeek "未找到受控 Claude Code，请先重新运行同一条 bootstrap 命令" }
     if (-not (Test-Path -LiteralPath (Join-Path $LaneRoot "VERSION") -PathType Leaf) -or (Get-Content -LiteralPath (Join-Path $LaneRoot "VERSION") -Raw).Trim() -ne "1.3.0") { Stop-DeepSeek "未找到固定版 claude-lane" }
 
     $Architecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     switch -Regex ($Architecture.ToUpperInvariant()) {
-        "^(AMD64|X64)$" { $ExpectedHash = "fe639693fd7e9a881c799867711abb7666dec2a5fefbaba41af6a09e71bcbefa" }
-        "^ARM64$" { $ExpectedHash = "adaa6e3dadb8016755ccd1907a5f249c1bc9bdb6c71d3f7dcea7d5db8f72d0a5" }
+        "^(AMD64|X64)$" { $ExpectedHash = "af5bf1f1b2aadffc768eccd787084c6fdf9ba81624cbe96c1c6d9ac1a1550231" }
+        "^ARM64$" { $ExpectedHash = "07343ace8a2e9ba87eed716e9c0261ce4bda8954c316695e4cb26fd0605de13c" }
         default { Stop-DeepSeek "不支持的 Windows 架构：$Architecture" }
     }
     if ((Get-Sha256 $ClaudePath) -ne $ExpectedHash) { Stop-DeepSeek "已安装 Claude Code SHA-256 不匹配" }

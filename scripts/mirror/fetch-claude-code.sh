@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Fetch an immutable Claude Code release from Anthropic's official bucket.
-# Default is dry-run. Pass --execute to download and verify.
+# Fetch and verify Claude Code release metadata from Anthropic's official
+# bucket. Claude binaries are intentionally not mirrored: clients download the
+# pinned binary from Anthropic only after Clash is usable.
 
 set -u
 set -o pipefail
@@ -15,7 +16,8 @@ usage() {
 usage: bash scripts/mirror/fetch-claude-code.sh [--version X.Y.Z] [--work-dir DIR] [--execute]
 
 Default: print the fixed official URLs without downloading.
-Publisher dependencies for --execute: curl, gpg, plutil, shasum, codesign.
+Publisher dependencies for --execute: curl, gpg, plutil, shasum.
+Only the signed manifest, detached signature, key and audit evidence are saved.
 EOF
 }
 
@@ -33,7 +35,6 @@ BASE_URL="https://downloads.claude.ai/claude-code-releases"
 DEST="$MIRROR_WORK_DIR/claude-code/releases/$MIRROR_VERSION"
 EXPECTED_FINGERPRINT="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
 PLATFORMS="darwin-arm64 darwin-x64 win32-arm64 win32-x64"
-PUBLISHER_ARCH=$(/usr/bin/uname -m)
 
 mirror_say "Claude Code ${MIRROR_VERSION}"
 mirror_say "official manifest: ${BASE_URL}/${MIRROR_VERSION}/manifest.json"
@@ -48,7 +49,6 @@ done
 
 mirror_require /usr/bin/curl
 mirror_require /usr/bin/plutil
-mirror_require /usr/bin/codesign
 mirror_require gpg
 /bin/mkdir -p "$DEST/audit" || mirror_die "cannot create Claude staging directory"
 
@@ -76,7 +76,7 @@ GNUPGHOME="$GNUPG_HOME" gpg --batch --verify "$SIGNATURE" "$MANIFEST" >"$DEST/au
   mirror_die "Claude manifest signature verification failed"
 
 EVIDENCE="$DEST/audit/evidence.tsv"
-printf 'product\tversion\tplatform\tfile\tsize\tsha256\tofficial_url\tsignature_status\n' >"$EVIDENCE"
+printf 'product\tversion\tplatform\tsize\tsha256\tofficial_url\tsignature_status\n' >"$EVIDENCE"
 
 for platform in $PLATFORMS; do
   checksum=$(/usr/bin/plutil -extract "platforms.${platform}.checksum" raw -o - "$MANIFEST" 2>/dev/null) ||
@@ -86,37 +86,10 @@ for platform in $PLATFORMS; do
   binary=$(/usr/bin/plutil -extract "platforms.${platform}.binary" raw -o - "$MANIFEST" 2>/dev/null) ||
     mirror_die "manifest is missing ${platform} binary"
   mirror_valid_sha256 "$checksum" || mirror_die "invalid ${platform} checksum"
-  case "$platform" in
-    darwin-arm64) local_name=claude-darwin-arm64 ;;
-    darwin-x64) local_name=claude-darwin-x64 ;;
-    win32-arm64) local_name=claude-win32-arm64.exe ;;
-    win32-x64) local_name=claude-win32-x64.exe ;;
-    *) mirror_die "unsupported platform" ;;
-  esac
   official_url="$BASE_URL/$MIRROR_VERSION/$platform/$binary"
-  target="$DEST/$local_name"
-  mirror_download "$official_url" "$target" "$checksum" "Claude ${platform}"
-  [ "$(mirror_size "$target")" = "$size" ] || mirror_die "size mismatch for ${platform}"
-  signature_status="pending-windows"
-  case "$platform" in
-    darwin-*)
-      /bin/chmod 755 "$target" || mirror_die "cannot make ${platform} executable"
-      /usr/bin/codesign --verify --strict --verbose=2 "$target" >/dev/null 2>&1 || mirror_die "codesign failed for ${platform}"
-      signature_info=$(/usr/bin/codesign -d --verbose=4 "$target" 2>&1) || mirror_die "cannot read ${platform} signing identity"
-      printf '%s\n' "$signature_info" | /usr/bin/grep -Fqx 'Identifier=com.anthropic.claude-code' || mirror_die "unexpected Claude identifier"
-      printf '%s\n' "$signature_info" | /usr/bin/grep -Fqx 'TeamIdentifier=Q6L2SF6YDW' || mirror_die "unexpected Claude Team ID"
-      if { [ "$platform" = darwin-arm64 ] && [ "$PUBLISHER_ARCH" = arm64 ]; } ||
-         { [ "$platform" = darwin-x64 ] && [ "$PUBLISHER_ARCH" = x86_64 ]; }; then
-        "$target" --version 2>/dev/null | /usr/bin/head -n 1 | /usr/bin/grep -Fq "$MIRROR_VERSION" || mirror_die "Claude version check failed"
-        signature_status="verified-codesign-and-native-version"
-      else
-        signature_status="verified-codesign-version-pending-native-host"
-      fi
-      ;;
-  esac
-  printf 'claude-code\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$MIRROR_VERSION" "$platform" "$local_name" "$size" "$checksum" "$official_url" "$signature_status" >>"$EVIDENCE"
+  printf 'claude-code\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$MIRROR_VERSION" "$platform" "$size" "$checksum" "$official_url" "verified-signed-manifest-runtime-platform-signature" >>"$EVIDENCE"
 done
 
-mirror_say "verified Claude artifacts: $DEST"
-mirror_say "Windows Authenticode remains pending until verify-artifacts.ps1 runs on Windows."
+mirror_say "verified Claude signed release metadata: $DEST"
+mirror_say "no Claude binary was downloaded or staged for OSS upload"

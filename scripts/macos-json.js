@@ -76,6 +76,7 @@ function validProfileUid(value) {
 
 function profileProxies(path) {
   var document = parseProfilesDocument(readFile(path, false));
+  if (document.currentItem.type !== "remote") return "";
   var uid = document.currentItem.options.proxies || "";
   // 与 summary/register 共用严格解析器：重复 current/uid、flow YAML、歧义 option
   // 一律失败关闭，避免凭证被写进错误的增强文件。
@@ -111,6 +112,7 @@ function parseProfilesDocument(text) {
     var optionLine = -1;
     var options = {};
     var urlPresent = false;
+    var urlReady = false;
     for (var j = start.start + 1; j < end; j += 1) {
       var typeMatch = lines[j].match(new RegExp("^" + escapeRegExp(propertyIndent) + "type:\\s*([A-Za-z]+)\\s*$"));
       if (typeMatch) {
@@ -119,7 +121,12 @@ function parseProfilesDocument(text) {
       }
       var fileMatch = lines[j].match(new RegExp("^" + escapeRegExp(propertyIndent) + "file:\\s*([A-Za-z0-9]+\\.yaml)\\s*$"));
       if (fileMatch) file = fileMatch[1];
-      if (new RegExp("^" + escapeRegExp(propertyIndent) + "url:").test(lines[j])) urlPresent = true;
+      var urlMatch = lines[j].match(new RegExp("^" + escapeRegExp(propertyIndent) + "url:\\s*(\\S+)\\s*$"));
+      if (new RegExp("^" + escapeRegExp(propertyIndent) + "url:").test(lines[j])) {
+        if (urlPresent) throw new Error("profile item 的 url 重复");
+        urlPresent = true;
+      }
+      if (urlMatch && !/^(null|[\"']{2})$/i.test(urlMatch[1])) urlReady = true;
       if (new RegExp("^" + escapeRegExp(propertyIndent) + "option:").test(lines[j])) {
         if (lines[j] !== propertyIndent + "option:" || optionLine !== -1) {
           throw new Error("option 使用了不受支持的 flow/重复格式");
@@ -150,14 +157,13 @@ function parseProfilesDocument(text) {
       file: file,
       optionLine: optionLine,
       options: options,
-      urlPresent: urlPresent
+      urlPresent: urlPresent,
+      urlReady: urlReady
     });
   });
 
   var currentItems = items.filter(function (item) { return item.uid === currentUid; });
-  if (currentItems.length !== 1 || currentItems[0].type !== "remote") {
-    throw new Error("current 没有唯一对应到 remote item");
-  }
+  if (currentItems.length !== 1) throw new Error("current 没有唯一对应 item");
   return {lines: lines, currentUid: currentUid, currentItem: currentItems[0], items: items};
 }
 
@@ -181,7 +187,8 @@ function profileSummary(path) {
     options: options,
     missing: missing,
     remote_count: document.items.filter(function (item) { return item.type === "remote"; }).length,
-    url_present: document.currentItem.urlPresent
+    url_present: document.currentItem.urlPresent,
+    url_ready: document.currentItem.urlReady
   });
 }
 
@@ -198,6 +205,7 @@ function profileRegister(argv) {
 
   var original = readFile(path, false);
   var document = parseProfilesDocument(original);
+  if (document.currentItem.type !== "remote") throw new Error("当前 profile 不是 remote，拒绝登记增强文件");
   var existingOption = document.currentItem.options[kind] || "";
   var existingItems = document.items.filter(function (item) { return item.uid === uid; });
   if (existingOption) {

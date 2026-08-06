@@ -84,6 +84,56 @@ PROFILE_REGISTER=$(CLAUDE_LANE_DEPLOY_ID=profile-test bash "$HERE/profile-config
   ok "profiles 与新增强文件权限均为 600" || ng "profile-config 写后权限不安全"
 printf '%s' "$PROFILE_REGISTER" | grep -Fq 'example.invalid' && ng "登记输出泄漏订阅 URL" || ok "登记输出不含订阅 URL"
 
+echo "[0b] setup-state/subscription-checkpoint：缺订阅正常暂停，导入后可继续"
+export CLAUDE_LANE_SETUP_ROOT="$SANDBOX/setup-root"
+CHECKPOINT_READY=$(bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$CHECKPOINT_READY" | grep -q '^SETUP_STATE=SUBSCRIPTION_IMPORTED$' &&
+  [ "$(bash "$HERE/setup-state.sh" get)" = "SUBSCRIPTION_IMPORTED" ] &&
+  ok "已导入远程订阅时进入 SUBSCRIPTION_IMPORTED" || ng "已导入订阅未通过检查点"
+[ "$(stat -f '%Lp' "$CLAUDE_LANE_SETUP_ROOT/setup-progress.json")" = "600" ] &&
+  ok "安装进度文件权限为 600" || ng "安装进度文件权限不安全"
+grep -Fq 'example.invalid' "$CLAUDE_LANE_SETUP_ROOT/setup-progress.json" &&
+  ng "安装进度文件泄漏订阅 URL" || ok "安装进度文件不含订阅 URL"
+
+WAIT_CFG="$SANDBOX/wait-cfg"
+mkdir -p "$WAIT_CFG"
+CHECKPOINT_WAIT=$(CLAUDE_LANE_CFG="$WAIT_CFG" CLAUDE_LANE_SETUP_ROOT="$SANDBOX/wait-state" \
+  bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$CHECKPOINT_WAIT" | grep -q '^SETUP_STATE=WAITING_FOR_SUBSCRIPTION$' &&
+  [ "$(CLAUDE_LANE_SETUP_ROOT="$SANDBOX/wait-state" bash "$HERE/setup-state.sh" get)" = "WAITING_FOR_SUBSCRIPTION" ] &&
+  ok "profiles.yaml 缺失时正常暂停而非失败" || ng "缺订阅没有进入等待状态"
+
+NULL_CFG="$SANDBOX/null-url-cfg"
+mkdir -p "$NULL_CFG"
+sed 's#url: https://example.invalid/sub#url: null#' "$CLAUDE_LANE_CFG/profiles.yaml" >"$NULL_CFG/profiles.yaml"
+CHECKPOINT_NULL=$(CLAUDE_LANE_CFG="$NULL_CFG" CLAUDE_LANE_SETUP_ROOT="$SANDBOX/null-state" \
+  bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$CHECKPOINT_NULL" | grep -q '^SETUP_STATE=WAITING_FOR_SUBSCRIPTION$' &&
+  ok "空订阅 URL 不会被误判为已导入" || ng "空订阅 URL 被错误放行"
+
+LOCAL_CFG="$SANDBOX/local-current-cfg"
+mkdir -p "$LOCAL_CFG"
+cat >"$LOCAL_CFG/profiles.yaml" <<'EOF'
+current: LOCAL0000001
+items:
+- uid: LOCAL0000001
+  type: local
+  name: Local.yaml
+  file: LOCAL0000001.yaml
+EOF
+CHECKPOINT_LOCAL=$(CLAUDE_LANE_CFG="$LOCAL_CFG" CLAUDE_LANE_SETUP_ROOT="$SANDBOX/local-state" \
+  bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$CHECKPOINT_LOCAL" | grep -q '^SETUP_STATE=WAITING_FOR_SUBSCRIPTION$' &&
+  ok "当前为本地 profile 时正常等待远程订阅" || ng "本地 profile 被当成配置损坏"
+
+NULL_CURRENT_CFG="$SANDBOX/null-current-cfg"
+mkdir -p "$NULL_CURRENT_CFG"
+sed 's/^current: .*/current: null/' "$CLAUDE_LANE_CFG/profiles.yaml" >"$NULL_CURRENT_CFG/profiles.yaml"
+CHECKPOINT_NULL_CURRENT=$(CLAUDE_LANE_CFG="$NULL_CURRENT_CFG" CLAUDE_LANE_SETUP_ROOT="$SANDBOX/null-current-state" \
+  bash "$HERE/subscription-checkpoint.sh" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$CHECKPOINT_NULL_CURRENT" | grep -q '^SETUP_STATE=WAITING_FOR_SUBSCRIPTION$' &&
+  ok "Clash 首次启动的 current:null 正常等待订阅" || ng "current:null 被误判为配置损坏"
+
 BAD_PROFILE_CFG="$SANDBOX/bad-profile-cfg"
 mkdir -p "$BAD_PROFILE_CFG"
 cp "$CLAUDE_LANE_CFG/profiles.yaml" "$BAD_PROFILE_CFG/profiles.yaml"

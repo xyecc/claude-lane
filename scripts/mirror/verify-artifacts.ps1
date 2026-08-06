@@ -36,6 +36,30 @@ function Assert-Authenticode([string]$Path, [string]$PublisherPattern) {
     }
 }
 
+function Assert-ClashSignature([string]$Path, [string]$UpstreamStatus) {
+    $Signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($Signature.Status -eq [System.Management.Automation.SignatureStatus]::Valid) {
+        if ($null -eq $Signature.SignerCertificate -or $Signature.SignerCertificate.Subject -notmatch 'Clash|Verge') {
+            throw "Unexpected Authenticode publisher: $Path"
+        }
+        return [ordered]@{
+            status = "verified-authenticode"
+            subject = $Signature.SignerCertificate.Subject
+            thumbprint = $Signature.SignerCertificate.Thumbprint
+            upstream_signature = $UpstreamStatus
+        }
+    }
+    if ($Signature.Status -eq [System.Management.Automation.SignatureStatus]::NotSigned -and $UpstreamStatus -match '^verified-tauri-minisign') {
+        return [ordered]@{
+            status = "authenticode-not-signed"
+            subject = ""
+            thumbprint = ""
+            upstream_signature = $UpstreamStatus
+        }
+    }
+    throw "Clash signature verification failed ($($Signature.Status), upstream=$UpstreamStatus): $Path"
+}
+
 $ClaudeVersion = [string]$Manifest.claude_code.version
 $ClashVersion = [string]$Manifest.clash_verge.version
 $ClaudeDir = Join-Path $WorkDir "claude-code\releases\$ClaudeVersion"
@@ -69,7 +93,7 @@ $VersionOutput = (& $ClaudeFile --version 2>&1 | Select-Object -First 1 | Out-St
 if ($LASTEXITCODE -ne 0 -or $VersionOutput -notmatch [regex]::Escape($ClaudeVersion)) { throw "Claude version verification failed" }
 
 Assert-FileHash $ClashFile ([string]$ClashEntry.sha256)
-$ClashSignature = Assert-Authenticode $ClashFile 'Clash|Verge'
+$ClashSignature = Assert-ClashSignature $ClashFile ([string]$ClashEntry.signature_status)
 $FileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($ClashFile).ProductVersion
 if ([string]::IsNullOrWhiteSpace($FileVersion) -or $FileVersion -notmatch [regex]::Escape($ClashVersion)) {
     throw "Clash installer version verification failed"
