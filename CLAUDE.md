@@ -1,5 +1,7 @@
 # CLAUDE.md — Claude 专线配置执行手册（写给 agent）
 
+> **Windows 机器看这里**：本文件仅适用于 macOS。你在 Windows 上（`$env:OS` 为 `Windows_NT` / 存在 `C:\Windows`）→ **忽略下文全部内容，完整读取仓库根目录的 `RUNBOOK-WIN.md` 并按它执行。**
+
 你是新机器上的 Claude Code。本手册指导你把「只有 Claude 流量走 美国静态住宅 IP」的 Clash Verge Rev 配置部署到本机。**严格按阶段顺序执行（Phase -1 → Phase 6），每个阶段的 STOP 条件命中就停下来问用户，不要硬闯。**
 
 打扰用户的原则：能自动的自动、能代劳的代劳。整个流程只在三种事上开口——要秘密（四元组、订阅链接）、要 GUI 操作（激活）、STOP 条件命中。其余一律"做完告知"，不要"做前请示"。
