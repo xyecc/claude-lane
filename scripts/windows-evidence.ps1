@@ -197,8 +197,10 @@ foreach ($Root in @(
         $Props = $null
         try { $Props = Get-ItemProperty -LiteralPath $Key.PSPath -ErrorAction Stop } catch { continue }
         if ($null -eq $Props.PSObject.Properties["DisplayName"] -or [string]$Props.DisplayName -notmatch '^Clash Verge') { continue }
-        if ($null -ne $Props.PSObject.Properties["InstallLocation"] -and -not [string]::IsNullOrWhiteSpace([string]$Props.InstallLocation)) {
-            [void]$ClashLocations.Add([string]$Props.InstallLocation)
+        if ($null -ne $Props.PSObject.Properties["InstallLocation"]) {
+            # NSIS stores InstallLocation wrapped in literal quotes on real hosts.
+            $Location = ([string]$Props.InstallLocation).Trim().Trim('"').TrimEnd('\')
+            if (-not [string]::IsNullOrWhiteSpace($Location)) { [void]$ClashLocations.Add($Location) }
         }
     }
 }
@@ -207,7 +209,10 @@ foreach ($Root in @(
 $ClashPath = $null
 foreach ($Location in $ClashLocations) {
     foreach ($ExeName in @("clash-verge.exe", "Clash Verge.exe")) {
-        $Candidate = Join-Path $Location $ExeName
+        # IO.Path::Combine does not validate drives; malformed registry values
+        # degrade to a failed Test-Path instead of a thrown error.
+        $Candidate = $null
+        try { $Candidate = [IO.Path]::Combine($Location, $ExeName) } catch { continue }
         if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
             $ClashPath = $Candidate
             break

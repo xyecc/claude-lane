@@ -153,8 +153,10 @@ function Find-InstalledClashPaths {
             $Props = $null
             try { $Props = Get-ItemProperty -LiteralPath $Key.PSPath -ErrorAction Stop } catch { continue }
             if ($null -eq $Props.PSObject.Properties["DisplayName"] -or [string]$Props.DisplayName -notmatch '^Clash Verge') { continue }
-            if ($null -ne $Props.PSObject.Properties["InstallLocation"] -and -not [string]::IsNullOrWhiteSpace([string]$Props.InstallLocation)) {
-                [void]$Locations.Add([string]$Props.InstallLocation)
+            if ($null -ne $Props.PSObject.Properties["InstallLocation"]) {
+                # NSIS stores InstallLocation wrapped in literal quotes on real hosts.
+                $Location = ([string]$Props.InstallLocation).Trim().Trim('"').TrimEnd('\')
+                if (-not [string]::IsNullOrWhiteSpace($Location)) { [void]$Locations.Add($Location) }
             }
         }
     }
@@ -163,7 +165,10 @@ function Find-InstalledClashPaths {
     $Found = New-Object System.Collections.Generic.List[string]
     foreach ($Location in $Locations) {
         foreach ($ExeName in @("clash-verge.exe", "Clash Verge.exe")) {
-            $ExePath = Join-Path $Location $ExeName
+            # IO.Path::Combine does not validate drives, so a malformed registry
+            # value degrades to a failed Test-Path instead of a thrown error.
+            $ExePath = $null
+            try { $ExePath = [IO.Path]::Combine($Location, $ExeName) } catch { continue }
             if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) { continue }
             $ExeItem = Get-Item -LiteralPath $ExePath -Force
             if (($ExeItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
@@ -182,6 +187,16 @@ try {
     $Arch = Get-ArchitectureName
     $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-bootstrap-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $TempRoot | Out-Null
+    # Fail fast with a clear message on hosts whose %TEMP% points at a
+    # restricted location (e.g. C:\Windows\Temp): create/list/delete must all work.
+    try {
+        $TempProbe = Join-Path $TempRoot "probe"
+        New-Item -ItemType Directory -Path $TempProbe | Out-Null
+        $null = @(Get-ChildItem -LiteralPath $TempRoot -Force)
+        Remove-Item -LiteralPath $TempProbe -Recurse -Force
+    } catch {
+        Stop-Bootstrap "当前 TEMP 目录权限异常（$([IO.Path]::GetTempPath())）：无法枚举或删除临时文件。请先在本窗口把 TEMP/TMP 指到用户可写目录（例如 %LOCALAPPDATA%\Temp）再重新运行同一命令"
+    }
 
     if ([string]::IsNullOrWhiteSpace($ManifestFile)) {
         if (Test-Placeholder $PrimaryBaseUrl -or -not $PrimaryBaseUrl.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) { Stop-Bootstrap "国内主下载源尚未发布，启动器保持失败关闭" }
@@ -368,5 +383,11 @@ try {
 } finally {
     Remove-Item Env:DISABLE_UPDATES -ErrorAction SilentlyContinue
     Remove-Item Env:DISABLE_AUTOUPDATER -ErrorAction SilentlyContinue
-    if (-not [string]::IsNullOrWhiteSpace($TempRoot) -and (Test-Path -LiteralPath $TempRoot)) { Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    if (-not [string]::IsNullOrWhiteSpace($TempRoot) -and (Test-Path -LiteralPath $TempRoot)) {
+        # A throwing cleanup would mask the original error (seen on a real host
+        # whose %TEMP% pointed at C:\Windows\Temp); never let it escape.
+        try { Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue } catch {
+            Write-Warning "临时目录清理失败（不影响本次结果）：$TempRoot"
+        }
+    }
 }
