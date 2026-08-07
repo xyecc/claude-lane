@@ -377,9 +377,19 @@ try {
 
     $DeepSeekLauncher = Join-Path $ReleaseTarget "scripts\windows-deepseek.ps1"
     if (-not (Test-Path -LiteralPath $DeepSeekLauncher -PathType Leaf)) { Stop-Bootstrap "安装包缺少 Windows DeepSeek 启动器" }
-    Write-Output "Claude Code 官方固定版安装与签名校验通过；进入本地 DeepSeek 与专线配置阶段。"
-    $LauncherText = Get-Content -LiteralPath $DeepSeekLauncher -Raw -Encoding UTF8
-    & ([scriptblock]::Create($LauncherText))
+    Write-Output "Claude Code 官方固定版安装与签名校验通过。"
+    # The Windows path configures and verifies routing with deterministic
+    # scripts, so the DeepSeek-driven agent session adds nothing here; it is
+    # kept only as an opt-in for parity with the macOS agent flow.
+    $DeepSeekChoice = Read-Host "Windows 纯脚本路径已完成专线配置与验证；DeepSeek 临时代理会话通常不需要。输入 YES 进入，直接回车跳过"
+    if (([string]$DeepSeekChoice).Trim().ToUpperInvariant() -eq "YES") {
+        $LauncherText = Get-Content -LiteralPath $DeepSeekLauncher -Raw -Encoding UTF8
+        & ([scriptblock]::Create($LauncherText))
+    } else {
+        Write-Output "已跳过 DeepSeek 会话。收尾步骤："
+        Write-Output "  1) 生成审计证据：scripts\windows-evidence.ps1（内存脚本块方式运行，见 docs\windows-runbook.md）"
+        Write-Output "  2) Phase 6 收尾与正常 Claude 登录：scripts\windows-complete.ps1"
+    }
 } finally {
     Remove-Item Env:DISABLE_UPDATES -ErrorAction SilentlyContinue
     Remove-Item Env:DISABLE_AUTOUPDATER -ErrorAction SilentlyContinue

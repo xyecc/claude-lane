@@ -142,11 +142,22 @@ if ($MixedPort -eq 0 -and $GeneratedText -match '(?m)^(?:mixed-port|port):\s*([0
 $ClaudeIp = ""
 $NormalIp = ""
 $PendingBaseline = $null
-if ($MixedPort -gt 0 -and (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
-    $Proxy = "http://127.0.0.1:$MixedPort"
-    $Trace = Get-Ip -Arguments @("-q", "-fsS", "--max-time", "25", "--proxy", $Proxy, "https://claude.ai/cdn-cgi/trace")
-    if ($Trace -match '(?m)^ip=([^\r\n]+)$') { $ClaudeIp = $Matches[1].Trim() }
-    $NormalIp = Get-Ip -Arguments @("-q", "-fsS", "--max-time", "15", "--proxy", $Proxy, "https://api.ipify.org")
+if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+    # System-proxy hosts answer on the mixed port; TUN hosts loop that path
+    # back through the kernel and the TLS handshake dies (seen on a real
+    # host). Probe the mixed port first, then fall back to the direct route
+    # the TUN driver actually carries.
+    $AttemptArgs = @()
+    if ($MixedPort -gt 0) { $AttemptArgs += , @("--proxy", "http://127.0.0.1:$MixedPort") }
+    $AttemptArgs += , @()
+    foreach ($ExtraArgs in $AttemptArgs) {
+        $Trace = Get-Ip -Arguments (@("-q", "-fsS", "--max-time", "25") + $ExtraArgs + @("https://claude.ai/cdn-cgi/trace"))
+        if ($Trace -match '(?m)^ip=([^\r\n]+)$') { $ClaudeIp = $Matches[1].Trim() }
+        if (-not (Test-Ip $NormalIp)) {
+            $NormalIp = Get-Ip -Arguments (@("-q", "-fsS", "--max-time", "15") + $ExtraArgs + @("https://api.ipify.org"))
+        }
+        if ((Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp)) { break }
+    }
 }
 if ((Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp) -and $ClaudeIp -ne $NormalIp) {
     if ($SaveBaseline) {
@@ -166,8 +177,6 @@ if ((Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp) -and $ClaudeIp -ne $NormalIp) {
             Fail "Claude / 普通出口隔离（本地基线损坏）"
         }
     }
-} elseif ($MixedPort -le 0) {
-    Fail "Claude / 普通出口隔离（Clash 未开放本机混合端口，无法对比出口）"
 } elseif (-not (Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp)) {
     Fail "Claude / 普通出口隔离（普通出口正常，但 Claude 走不通：US-Static 静态住宅链路不可用。请在 Clash「代理」页对 US-Static 点延迟测试；失败说明四元组或 ISP 侧有问题，与本工具无关）"
 } elseif ((Test-Ip $ClaudeIp) -and -not (Test-Ip $NormalIp)) {
