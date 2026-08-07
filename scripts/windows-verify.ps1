@@ -166,7 +166,15 @@ if ((Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp) -and $ClaudeIp -ne $NormalIp) {
             Fail "Claude / 普通出口隔离（本地基线损坏）"
         }
     }
-} else { Fail "Claude / 普通出口隔离" }
+} elseif ($MixedPort -le 0) {
+    Fail "Claude / 普通出口隔离（Clash 未开放本机混合端口，无法对比出口）"
+} elseif (-not (Test-Ip $ClaudeIp) -and (Test-Ip $NormalIp)) {
+    Fail "Claude / 普通出口隔离（普通出口正常，但 Claude 走不通：US-Static 静态住宅链路不可用。请在 Clash「代理」页对 US-Static 点延迟测试；失败说明四元组或 ISP 侧有问题，与本工具无关）"
+} elseif ((Test-Ip $ClaudeIp) -and -not (Test-Ip $NormalIp)) {
+    Fail "Claude / 普通出口隔离（Claude 出口正常，但普通出口取不到：机场节点或网络异常）"
+} elseif ((Test-Ip $ClaudeIp) -and $ClaudeIp -eq $NormalIp) {
+    Fail "Claude / 普通出口隔离（两者出口相同：Claude 流量没有走静态住宅 IP，检查 Claude 组是否选中 US-Static）"
+} else { Fail "Claude / 普通出口隔离（两个出口都取不到：先确认 Clash 正常联网）" }
 
 if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
     $LeakCount = 0
