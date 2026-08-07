@@ -65,7 +65,11 @@ function Get-YamlScalar([string]$Path, [string]$Key) {
     return $Value
 }
 function Invoke-Api([string]$Base, [string]$Path) {
-    return Invoke-RestMethod -UseBasicParsing -Uri ($Base + $Path) -Headers $ApiHeaders -Method Get -TimeoutSec 10
+    # Windows PowerShell 5.1 falls back to ISO-8859-1 when a JSON response
+    # carries no charset, which mangles emoji and CJK proxy names. Decode the
+    # raw bytes as UTF-8 so name comparisons see what Mihomo actually sent.
+    $Response = Invoke-WebRequest -UseBasicParsing -Uri ($Base + $Path) -Headers $ApiHeaders -Method Get -TimeoutSec 10
+    return ([Text.Encoding]::UTF8.GetString($Response.RawContentStream.ToArray()) | ConvertFrom-Json)
 }
 function Get-Ip([string[]]$Arguments) {
     $Output = (& curl.exe @Arguments 2>$null | Out-String).Trim()
@@ -112,7 +116,9 @@ try {
     $Proxies = Invoke-Api $ApiBase "/proxies"
     $ClaudeGroup = $Proxies.proxies.PSObject.Properties["Claude"].Value
     $ChainGroup = $Proxies.proxies.PSObject.Properties["US-Chain"].Value
-    if ($null -ne $ClaudeGroup -and $null -ne $ChainGroup -and [string]$ClaudeGroup.now -eq "🇺🇸 US-Static" -and -not [string]::IsNullOrWhiteSpace([string]$ChainGroup.now)) {
+    # Match the ASCII tail only: the flag prefix is cosmetic and survives
+    # transcoding badly, while "US-Static" is written by this project.
+    if ($null -ne $ClaudeGroup -and $null -ne $ChainGroup -and ([string]$ClaudeGroup.now).TrimEnd().EndsWith("US-Static") -and -not [string]::IsNullOrWhiteSpace([string]$ChainGroup.now)) {
         Pass "Claude 与 US-Chain 策略组"
     } else { Fail "Claude 与 US-Chain 策略组" }
 } catch { Fail "Claude 与 US-Chain 策略组" }
