@@ -201,6 +201,33 @@ function Read-Secret([string]$Prompt) {
     return $Plain
 }
 function Quote-Yaml([string]$Value) { return ($Value | ConvertTo-Json -Compress) }
+function Get-SubscriptionUsNodes([string]$SubscriptionPath) {
+    # macOS parity: auto-scan US node names from the current subscription.
+    # Reads proxy names only — never the subscription URL or server fields.
+    if (-not (Test-Path -LiteralPath $SubscriptionPath -PathType Leaf)) { return @() }
+    $InProxies = $false
+    $Names = New-Object System.Collections.Generic.List[string]
+    foreach ($Line in @(Get-Content -LiteralPath $SubscriptionPath -Encoding UTF8)) {
+        $Text = [string]$Line
+        if ($Text -match '^proxies:\s*$') { $InProxies = $true; continue }
+        if ($InProxies -and $Text -match '^[A-Za-z0-9_-]+:') { $InProxies = $false }
+        if (-not $InProxies) { continue }
+        $Raw = $null
+        if ($Text -match '^\s*-\s*\{.*?name:\s*([^,}]+)') { $Raw = $Matches[1].Trim() }
+        elseif ($Text -match '^\s*-\s+name:\s*(.+?)\s*$') { $Raw = $Matches[1].Trim() }
+        if ($null -eq $Raw -or $Raw.Length -eq 0) { continue }
+        $Name = $Raw
+        if ($Name.Length -ge 2 -and $Name.StartsWith('"') -and $Name.EndsWith('"')) {
+            try { $Name = [string]($Name | ConvertFrom-Json) } catch { continue }
+        } elseif ($Name.Length -ge 2 -and $Name.StartsWith("'") -and $Name.EndsWith("'")) {
+            $Name = $Name.Substring(1, $Name.Length - 2).Replace("''", "'")
+        }
+        if ([string]::IsNullOrWhiteSpace($Name) -or $Names.Contains($Name)) { continue }
+        [void]$Names.Add($Name)
+    }
+    $UsPattern = '(?i)(美国|United\s*States|America|🇺🇸|Los\s*Angeles|San\s*Jose|Seattle|Dallas|Phoenix|Ashburn|(?<![A-Za-z])(USA?|LAX|SJC)(?![A-Za-z]))'
+    return @($Names | Where-Object { $_ -match $UsPattern })
+}
 function Assert-ManagedRouting([System.Collections.IDictionary]$Targets) {
     $ProxyText = Get-Content -LiteralPath ([string]$Targets["proxies"]) -Raw -Encoding UTF8
     $GroupText = Get-Content -LiteralPath ([string]$Targets["groups"]) -Raw -Encoding UTF8
@@ -240,7 +267,7 @@ try {
     if ($AllManaged) {
         Assert-ManagedRouting $Targets
         $Confirmed = Read-Host "检测到路由配置已写入。请在 Clash Verge 点当前订阅卡片、开启 TUN 并保持规则模式；完成后输入 YES"
-        if ($Confirmed -ceq "YES") {
+        if (([string]$Confirmed).Trim().ToUpperInvariant() -eq "YES") {
             Set-Progress ROUTING_CONFIGURED routing_configured
             Write-Output "SETUP_STATE=ROUTING_CONFIGURED"
         } else {
@@ -252,14 +279,26 @@ try {
 
     Set-Progress WAITING_FOR_ISP isp_required
     $Ready = Read-Host "是否已准备静态住宅 ISP SOCKS5 四元组？准备好请输入 YES，否则直接回车暂停"
-    if ($Ready -cne "YES") {
+    if (([string]$Ready).Trim().ToUpperInvariant() -ne "YES") {
         Write-Output "SETUP_STATE=WAITING_FOR_ISP"
         Write-Output "NEXT_ACTION=PREPARE_STATIC_ISP_SOCKS5"
         return
     }
-    Write-Output "请从 Clash Verge 当前订阅中复制美国节点名；多个节点用英文分号分隔。节点名可以显示，订阅 URL 不要粘贴。"
-    $NodeInput = Read-Host "美国节点名"
-    $Nodes = @($NodeInput -split ';' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $Nodes = @()
+    $AutoNodes = @(Get-SubscriptionUsNodes (Join-Path (Join-Path $ConfigRoot "profiles") ([string]$Profile.CurrentUid + ".yaml")))
+    if ($AutoNodes.Count -gt 20) { $AutoNodes = @($AutoNodes[0..19]); Write-Output "美国节点超过 20 个，只取前 20 个。" }
+    if ($AutoNodes.Count -gt 0) {
+        Write-Output ("已从当前订阅自动识别 " + $AutoNodes.Count + " 个美国节点（只读节点名，不读订阅 URL）：")
+        foreach ($AutoNode in $AutoNodes) { Write-Output ("  - " + $AutoNode) }
+        $NodeInput = Read-Host "直接回车使用以上全部节点；或输入英文分号分隔的节点名覆盖"
+        if ([string]::IsNullOrWhiteSpace($NodeInput)) { $Nodes = $AutoNodes }
+    } else {
+        Write-Output "未能从订阅自动识别美国节点。请从 Clash Verge 订阅「编辑文件」中复制节点名；多个节点用英文分号分隔。节点名可以显示，订阅 URL 不要粘贴。"
+        $NodeInput = Read-Host "美国节点名"
+    }
+    if ($Nodes.Count -eq 0) {
+        $Nodes = @($NodeInput -split ';' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
     if ($Nodes.Count -eq 0 -or $Nodes.Count -gt 20) { Stop-Routing "至少需要 1 个、最多 20 个美国节点名" }
     foreach ($Node in $Nodes) {
         if ($Node.Length -gt 200 -or $Node -match '[\r\n]' -or $Node -match '(?i)^https?://') { Stop-Routing "美国节点名格式无效" }

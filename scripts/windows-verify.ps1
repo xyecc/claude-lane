@@ -86,9 +86,11 @@ if (-not (Test-Path -LiteralPath $Generated -PathType Leaf)) { throw "找不到 
 $GeneratedItem = Get-Item -LiteralPath $Generated -Force
 if (($GeneratedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Clash 生成配置不能是重解析点" }
 $GeneratedText = Get-Content -LiteralPath $Generated -Raw -Encoding UTF8
-$Controller = Get-YamlScalar $Generated "external-controller"
+$ControllerGuidance = "Mihomo 外部控制器未启用或未监听本机。请在 Clash Verge → 设置 → 外部控制器监听地址：打开开关、填入 127.0.0.1:9097 并保存，然后点当前订阅卡片重新生成配置，再重跑本命令"
+$Controller = ""
+try { $Controller = Get-YamlScalar $Generated "external-controller" } catch { throw $ControllerGuidance }
 $Secret = Get-YamlScalar $Generated "secret"
-if ([string]::IsNullOrWhiteSpace($Controller) -or $Controller -notmatch '^(127\.0\.0\.1|localhost|0\.0\.0\.0):([0-9]{1,5})$') { throw "只允许本机 Mihomo 控制端口" }
+if ([string]::IsNullOrWhiteSpace($Controller) -or $Controller -notmatch '^(127\.0\.0\.1|localhost|0\.0\.0\.0):([0-9]{1,5})$') { throw $ControllerGuidance }
 $ControllerPort = [int]$Matches[2]
 if ($ControllerPort -lt 1 -or $ControllerPort -gt 65535) { throw "Mihomo 控制端口无效" }
 $ApiBase = "http://127.0.0.1:$ControllerPort"
