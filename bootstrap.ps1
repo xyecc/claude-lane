@@ -138,6 +138,41 @@ function Assert-DirectoryTree([string]$ExpectedRoot, [string]$ActualRoot) {
     }
 }
 
+function Find-InstalledClashPaths {
+    # Users install Clash Verge to custom directories; resolve real install
+    # locations from uninstall registry keys, then fall back to fixed paths.
+    # 2.5.x ships clash-verge.exe; older builds used "Clash Verge.exe".
+    $Locations = New-Object System.Collections.Generic.List[string]
+    foreach ($Root in @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+    )) {
+        if (-not (Test-Path -Path $Root)) { continue }
+        foreach ($Key in @(Get-ChildItem -Path $Root -ErrorAction SilentlyContinue)) {
+            $Props = $null
+            try { $Props = Get-ItemProperty -LiteralPath $Key.PSPath -ErrorAction Stop } catch { continue }
+            if ($null -eq $Props.PSObject.Properties["DisplayName"] -or [string]$Props.DisplayName -notmatch '^Clash Verge') { continue }
+            if ($null -ne $Props.PSObject.Properties["InstallLocation"] -and -not [string]::IsNullOrWhiteSpace([string]$Props.InstallLocation)) {
+                [void]$Locations.Add([string]$Props.InstallLocation)
+            }
+        }
+    }
+    [void]$Locations.Add((Join-Path $env:LOCALAPPDATA "Programs\Clash Verge"))
+    [void]$Locations.Add((Join-Path $env:ProgramFiles "Clash Verge"))
+    $Found = New-Object System.Collections.Generic.List[string]
+    foreach ($Location in $Locations) {
+        foreach ($ExeName in @("clash-verge.exe", "Clash Verge.exe")) {
+            $ExePath = Join-Path $Location $ExeName
+            if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) { continue }
+            $ExeItem = Get-Item -LiteralPath $ExePath -Force
+            if (($ExeItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+            if (-not $Found.Contains($ExeItem.FullName)) { [void]$Found.Add($ExeItem.FullName) }
+        }
+    }
+    return @($Found.ToArray())
+}
+
 try {
     if (-not [Environment]::Is64BitOperatingSystem) { Stop-Bootstrap "只支持 64 位 Windows" }
     if ([Environment]::OSVersion.Version -lt [Version]"10.0.17763") { Stop-Bootstrap "需要 Windows 10 1809 或更高版本" }
@@ -182,7 +217,7 @@ try {
     $InstallRoot = Join-Path $env:LOCALAPPDATA "claude-lane"
     $LaneRoot = [string]$Manifest.claude_lane.archive_root
     $ReleaseTarget = Join-Path $InstallRoot "releases\v$ExpectedLaneVersion"
-    $KnownClash = @(@((Join-Path $env:LOCALAPPDATA "Programs\Clash Verge\Clash Verge.exe"), (Join-Path $env:ProgramFiles "Clash Verge\Clash Verge.exe")) | Where-Object { Test-Path -LiteralPath $_ })
+    $KnownClash = @(Find-InstalledClashPaths)
     $StateFile = Join-Path $InstallRoot "setup-progress.json"
     # Persist the already-validated manifest bytes for RC audit evidence (non-secret).
     $CandidateStateDir = Join-Path $InstallRoot "state"

@@ -184,16 +184,36 @@ if ($LASTEXITCODE -ne 0 -or $ClaudeVersionOutput -notmatch [regex]::Escape($Clau
     Stop-Evidence "Claude Code 版本输出与固定版本不符"
 }
 
-$ClashCandidates = @(
-    (Join-Path $env:LOCALAPPDATA "Programs\Clash Verge\Clash Verge.exe"),
-    (Join-Path $env:ProgramFiles "Clash Verge\Clash Verge.exe")
-)
-$ClashPath = $null
-foreach ($Candidate in $ClashCandidates) {
-    if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
-        $ClashPath = $Candidate
-        break
+# Same detection as bootstrap.ps1: uninstall registry keys first (covers custom
+# install directories), fixed paths as fallback, both exe spellings.
+$ClashLocations = New-Object System.Collections.Generic.List[string]
+foreach ($Root in @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+)) {
+    if (-not (Test-Path -Path $Root)) { continue }
+    foreach ($Key in @(Get-ChildItem -Path $Root -ErrorAction SilentlyContinue)) {
+        $Props = $null
+        try { $Props = Get-ItemProperty -LiteralPath $Key.PSPath -ErrorAction Stop } catch { continue }
+        if ($null -eq $Props.PSObject.Properties["DisplayName"] -or [string]$Props.DisplayName -notmatch '^Clash Verge') { continue }
+        if ($null -ne $Props.PSObject.Properties["InstallLocation"] -and -not [string]::IsNullOrWhiteSpace([string]$Props.InstallLocation)) {
+            [void]$ClashLocations.Add([string]$Props.InstallLocation)
+        }
     }
+}
+[void]$ClashLocations.Add((Join-Path $env:LOCALAPPDATA "Programs\Clash Verge"))
+[void]$ClashLocations.Add((Join-Path $env:ProgramFiles "Clash Verge"))
+$ClashPath = $null
+foreach ($Location in $ClashLocations) {
+    foreach ($ExeName in @("clash-verge.exe", "Clash Verge.exe")) {
+        $Candidate = Join-Path $Location $ExeName
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+            $ClashPath = $Candidate
+            break
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ClashPath)) { break }
 }
 if ([string]::IsNullOrWhiteSpace($ClashPath)) {
     Stop-Evidence "找不到已安装的 Clash Verge"
