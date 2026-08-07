@@ -9,7 +9,8 @@ $InstallRoot = Join-Path $env:LOCALAPPDATA "claude-lane"
 $ClaudePath = Join-Path $InstallRoot "tools\claude-code\2.1.220\claude.exe"
 $LaneRoot = Join-Path $InstallRoot "releases\v1.3.0"
 $TempConfig = Join-Path ([IO.Path]::GetTempPath()) ("claude-lane-deepseek-" + [guid]::NewGuid().ToString("N"))
-$ChildProcess = $null
+# script: 前缀是必须的：bootstrap 以内存脚本块方式调用本文件（见 windows-routing.ps1 同注）。
+$script:ChildProcess = $null
 $SecureKey = $null
 $PlainKey = $null
 $KeyBstr = [IntPtr]::Zero

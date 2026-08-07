@@ -29,9 +29,11 @@ $ResolvedScriptRoot = if (-not [string]::IsNullOrWhiteSpace($ScriptRoot)) {
 $StateTool = Join-Path $ResolvedScriptRoot "setup-state.ps1"
 $StartMarker = "# claude-lane managed start"
 $EndMarker = "# claude-lane managed end"
-$SecureValues = @()
-$PlainValues = @()
-$BstrValues = @()
+# script: 前缀是必须的：bootstrap 以内存脚本块方式调用本文件时，顶层裸赋值
+# 只进本地作用域，函数里的 $script: 引用会在严格模式下因变量不存在而中断。
+$script:SecureValues = @()
+$script:PlainValues = @()
+$script:BstrValues = @()
 
 function Stop-Routing([string]$Message) { throw "停止：$Message" }
 function Set-Progress([string]$State, [string]$Reason) {
@@ -339,7 +341,7 @@ $EndMarker
     } catch {
         Stop-Routing "配置写入或本地复验失败；使用 deployment id $DeploymentId 执行回滚"
     }
-    $PlainValues = @()
+    $script:PlainValues = @()
     Set-Progress WAITING_FOR_ACTIVATION activation_required
     Write-Output "SETUP_STATE=WAITING_FOR_ACTIVATION"
     Write-Output "DEPLOYMENT_ID=$DeploymentId"
@@ -348,13 +350,13 @@ $EndMarker
     Write-Output "请在 Clash Verge 点当前订阅卡片，开启 TUN 并保持规则模式，然后重新运行同一命令。"
     Write-Output "备份已保存在当前用户专属 ACL 目录；需要回滚时使用上面的 deployment id。"
 } finally {
-    $PlainValues = @()
-    foreach ($Pointer in $BstrValues) {
+    $script:PlainValues = @()
+    foreach ($Pointer in $script:BstrValues) {
         if ($Pointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Pointer) }
     }
-    foreach ($Secure in $SecureValues) {
+    foreach ($Secure in $script:SecureValues) {
         if ($null -ne $Secure) { $Secure.Dispose() }
     }
-    $BstrValues = @()
-    $SecureValues = @()
+    $script:BstrValues = @()
+    $script:SecureValues = @()
 }

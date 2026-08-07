@@ -9,8 +9,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
-$Passed = 0
-$Failed = 0
+# script: 前缀是必须的：bootstrap 以内存脚本块方式调用本文件（见 windows-routing.ps1 同注）。
+$script:Passed = 0
+$script:Failed = 0
 $ConfigRoot = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_LANE_CLASH_CFG)) {
     $env:CLAUDE_LANE_CLASH_CFG
 } else {
