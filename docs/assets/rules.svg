@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800" viewBox="0 0 1600 800" font-family="-apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#4B5563"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#C92A2A"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#1F7A45"/></marker>
+    <marker id="arrow-grey" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#9CA3AF"/></marker>
+  </defs>
+  <rect width="1600" height="800" rx="16" fill="#F5F2EC" stroke="#D9D4CA" stroke-width="2"/>
+  <text x="64" y="68" font-size="30" font-weight="700" fill="#1B1F23">templates/3-rules.yaml · 一条连接怎么被分层匹配</text>
+  <text x="64" y="100" font-size="16" fill="#57606A">从左到右逐层匹配，第一条命中即生效、未命中落到下一层；顺序敏感：QUIC 拦截必须在最前</text>
+  <line x1="64" y1="124" x2="1536" y2="124" stroke="#D9D4CA" stroke-width="2"/>
+
+  <!-- 入口 -->
+  <rect x="40" y="269" width="120" height="52" rx="26" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="100" y="291" font-size="14" font-weight="600" fill="#1B1F23" text-anchor="middle">一条新连接</text>
+  <text x="100" y="309" font-size="12" fill="#57606A" text-anchor="middle">TUN 接管</text>
+  <line x1="162" y1="295" x2="188" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="867" y="150" font-size="13" fill="#57606A" text-anchor="middle">匹配顺序 →　每层「未命中」就落到下一层，MATCH 是最后的兜底</text>
+  <!-- ① QUIC / UDP 拦截 -->
+  <rect x="190" y="160" width="250" height="270" rx="14" fill="#FDECEC" stroke="#C92A2A" stroke-width="2"/>
+  <line x1="204" y1="208" x2="426" y2="208" stroke="#C92A2A" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="315" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">① QUIC / UDP 拦截</text>
+  <text x="204" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Google Chrome(*)</text>
+  <text x="204" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP + DST-PORT 443</text>
+  <text x="204" y="278" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  → REJECT</text>
+  <text x="204" y="298" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Claude / Helper(*)</text>
+  <text x="204" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude / claude.exe</text>
+  <text x="204" y="338" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP → REJECT</text>
+  <text x="315" y="382" font-size="13" fill="#57606A" text-anchor="middle">排最前（prepend）</text>
+  <text x="315" y="402" font-size="13" fill="#57606A" text-anchor="middle">拒掉后客户端无感回落 TCP</text>
+  <line x1="442" y1="295" x2="464" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- ② 进程名导流 -->
+  <rect x="466" y="160" width="250" height="270" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <line x1="480" y1="208" x2="702" y2="208" stroke="#C58A00" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="591" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">② 进程名导流</text>
+  <text x="480" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Claude</text>
+  <text x="480" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Claude Helper (*)</text>
+  <text x="480" y="278" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude</text>
+  <text x="480" y="298" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude.exe</text>
+  <text x="480" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  → 策略组 Claude</text>
+  <text x="591" y="382" font-size="13" fill="#57606A" text-anchor="middle">最可靠：不受 DNS / IP 影响</text>
+  <text x="591" y="402" font-size="13" fill="#57606A" text-anchor="middle">CLI 的两个进程名都要写</text>
+  <line x1="718" y1="295" x2="740" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- ③ 域名兜底 -->
+  <rect x="742" y="160" width="250" height="270" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <line x1="756" y1="208" x2="978" y2="208" stroke="#C58A00" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="867" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">③ 域名兜底</text>
+  <text x="756" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">DOMAIN-SUFFIX anthropic.com</text>
+  <text x="756" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  · claude.com · claude.ai</text>
+  <text x="756" y="278" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  · claudeusercontent.com</text>
+  <text x="756" y="298" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">DOMAIN-KEYWORD anthropic</text>
+  <text x="756" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">DOMAIN-SUFFIX http-intake.logs</text>
+  <text x="756" y="338" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  .us5.datadoghq.com ← 遥测</text>
+  <text x="867" y="382" font-size="13" fill="#57606A" text-anchor="middle">遥测连接识别不出进程，</text>
+  <text x="867" y="402" font-size="13" fill="#57606A" text-anchor="middle">只能靠精确主机名兜住</text>
+  <line x1="994" y1="295" x2="1016" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- ④ IP 段兜底 -->
+  <rect x="1018" y="160" width="250" height="270" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <line x1="1032" y1="208" x2="1254" y2="208" stroke="#C58A00" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1143" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">④ IP 段兜底</text>
+  <text x="1032" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">IP-CIDR 160.79.104.0/23</text>
+  <text x="1032" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  no-resolve → 策略组 Claude</text>
+  <text x="1143" y="382" font-size="13" fill="#57606A" text-anchor="middle">Anthropic 自有网段</text>
+  <text x="1143" y="402" font-size="13" fill="#57606A" text-anchor="middle">DNS 被污染也抓得住</text>
+  <line x1="1270" y1="295" x2="1292" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- MATCH · 其余流量 -->
+  <rect x="1294" y="160" width="250" height="270" rx="14" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <line x1="1308" y1="208" x2="1530" y2="208" stroke="#868E96" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1419" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">MATCH · 其余流量</text>
+  <text x="1308" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">MATCH → 订阅默认策略</text>
+  <text x="1419" y="382" font-size="13" fill="#57606A" text-anchor="middle">机场订阅原有规则</text>
+  <text x="1419" y="402" font-size="13" fill="#57606A" text-anchor="middle">不受本方案影响</text>
+  <!-- ① → REJECT -->
+  <line x1="315" y1="432" x2="315" y2="558" stroke="#C92A2A" stroke-width="2.5" marker-end="url(#arrow-red)"/>
+  <rect x="190" y="560" width="250" height="90" rx="14" fill="#FDECEC" stroke="#C92A2A" stroke-width="2"/>
+  <text x="315" y="596" font-size="18" font-weight="700" fill="#C92A2A" text-anchor="middle">REJECT</text>
+  <text x="315" y="620" font-size="12" fill="#57606A" text-anchor="middle">客户端回落 TCP 重连 → 再走 ②③④</text>
+  <line x1="591" y1="432" x2="591" y2="558" stroke="#1F7A45" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <line x1="867" y1="432" x2="867" y2="558" stroke="#1F7A45" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <line x1="1143" y1="432" x2="1143" y2="558" stroke="#1F7A45" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <rect x="466" y="560" width="802" height="90" rx="14" fill="#E6F4EA" stroke="#1F7A45" stroke-width="2.5"/>
+  <text x="867" y="598" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">策略组「Claude」 → 🇺🇸 US-Static → US-Chain（机场美国节点） → 美国静态住宅 IP</text>
+  <text x="867" y="624" font-size="13" fill="#57606A" text-anchor="middle">命中任一层都进这条链，出口固定为静态住宅 IP（链路见架构图）</text>
+  <line x1="1419" y1="432" x2="1419" y2="558" stroke="#9CA3AF" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arrow-grey)"/>
+  <rect x="1294" y="560" width="250" height="90" rx="14" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <text x="1419" y="596" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">机场订阅原有规则</text>
+  <text x="1419" y="620" font-size="12" fill="#57606A" text-anchor="middle">日本 / 香港 / … 随订阅，不受影响</text>
+
+  <text x="800" y="712" font-size="16" fill="#1B1F23" text-anchor="middle">顺序不能动：QUIC 拦截必须 prepend 在最前。不要加全局 AND,((NETWORK,UDP),(DST-PORT,443)),REJECT —— 会废掉全机 HTTP/3。</text>
+  <text x="800" y="742" font-size="16" fill="#1B1F23" text-anchor="middle">用 Edge / Arc / Brave 的把第①层的进程名换成对应浏览器（模板注释里有对照表）；Safari 没有干净的进程级拦法。</text>
+</svg>

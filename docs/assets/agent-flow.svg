@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="-apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4B5563"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="900" rx="16" fill="#F5F2EC" stroke="#D9D4CA" stroke-width="2"/>
+  <text x="64" y="68" font-size="30" font-weight="700" fill="#1B1F23">agent 部署流程 · Phase -1 → 6</text>
+  <text x="64" y="100" font-size="16" fill="#57606A">黄色 4 处是你要动手的，其余由 agent 自动完成；每个阶段的 STOP 条件命中就停下问你，不硬闯</text>
+  <line x1="64" y1="124" x2="1536" y2="124" stroke="#D9D4CA" stroke-width="2"/>
+
+  <!-- 起点：你说一句话 -->
+  <rect x="110" y="150" width="900" height="44" rx="22" fill="#FFFFFF" stroke="#4B5563" stroke-width="2"/>
+  <text x="560" y="179" font-size="15" fill="#1B1F23" text-anchor="middle">你对 Claude Code 说：「按这个仓库的流程给本机配置 Claude 专线，先做环境体检。」</text>
+  <line x1="260" y1="196" x2="260" y2="226" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- Phase -1 · 代理软件归一 -->
+  <rect x="110" y="230" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="260" y="270" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase -1 · 代理软件归一</text>
+  <text x="260" y="298" font-size="13" fill="#57606A" text-anchor="middle">没装 Verge → brew 装好；用别的软件 → 迁移</text>
+  <text x="260" y="320" font-size="13" fill="#57606A" text-anchor="middle">只在必要时进入</text>
+  <line x1="412" y1="288" x2="468" y2="288" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="260" y1="348" x2="260" y2="360" stroke="#E67700" stroke-width="2"/>
+  <rect x="110" y="360" width="300" height="64" rx="12" fill="#FFF3BF" stroke="#E67700" stroke-width="2"/>
+  <circle cx="136" cy="392" r="14" fill="#E67700"/>
+  <text x="136" y="397" font-size="15" font-weight="700" fill="#FFFFFF" text-anchor="middle">①</text>
+  <text x="160" y="388" font-size="14" font-weight="600" fill="#1B1F23">贴一次机场订阅链接</text>
+  <text x="160" y="410" font-size="13" fill="#57606A">仅新装 Verge 时</text>
+  <!-- Phase 0 · 环境体检（只读） -->
+  <rect x="470" y="230" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="620" y="270" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 0 · 环境体检（只读）</text>
+  <text x="620" y="298" font-size="13" fill="#57606A" text-anchor="middle">内核 / TUN / 规则模式 / 美国节点</text>
+  <text x="620" y="320" font-size="13" fill="#57606A" text-anchor="middle">其他 VPN / python3 · curl</text>
+  <line x1="772" y1="288" x2="828" y2="288" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="530" y="215" width="260" height="28" rx="8" fill="#FDECEC" stroke="#C92A2A" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="660" y="234" font-size="12" font-weight="600" fill="#C92A2A" text-anchor="middle">STOP · 有问题停下问你，不硬闯</text>
+  <!-- Phase 1 · 收集输入 -->
+  <rect x="830" y="230" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="980" y="270" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 1 · 收集输入</text>
+  <text x="980" y="298" font-size="13" fill="#57606A" text-anchor="middle">美国节点默认全用，不问你</text>
+  <text x="980" y="320" font-size="13" fill="#57606A" text-anchor="middle">凭证由你自己写入本机</text>
+  <line x1="1132" y1="288" x2="1188" y2="288" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="980" y1="348" x2="980" y2="360" stroke="#E67700" stroke-width="2"/>
+  <rect x="830" y="360" width="300" height="64" rx="12" fill="#FFF3BF" stroke="#E67700" stroke-width="2"/>
+  <circle cx="856" cy="392" r="14" fill="#E67700"/>
+  <text x="856" y="397" font-size="15" font-weight="700" fill="#FFFFFF" text-anchor="middle">②</text>
+  <text x="880" y="388" font-size="14" font-weight="600" fill="#1B1F23">自己跑 scripts/set-credentials.sh</text>
+  <text x="880" y="410" font-size="13" fill="#57606A">密码隐藏输入，不进 AI 对话</text>
+  <!-- Phase 2 · 定位增强文件 -->
+  <rect x="1190" y="230" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="1340" y="270" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 2 · 定位增强文件</text>
+  <text x="1340" y="298" font-size="13" fill="#57606A" text-anchor="middle">读 profiles.yaml 找 4 个 uid</text>
+  <text x="1340" y="320" font-size="13" fill="#57606A" text-anchor="middle">缺的自动创建</text>
+  <!-- Phase 3 · 写入配置 -->
+  <rect x="110" y="520" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="260" y="560" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 3 · 写入配置</text>
+  <text x="260" y="588" font-size="13" fill="#57606A" text-anchor="middle">先 backup.sh（整次部署共用一个 id）</text>
+  <text x="260" y="610" font-size="13" fill="#57606A" text-anchor="middle">再按 templates/ 填 4 个文件</text>
+  <line x1="412" y1="578" x2="468" y2="578" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- Phase 4 · 激活 -->
+  <rect x="470" y="520" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="620" y="560" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 4 · 激活</text>
+  <text x="620" y="588" font-size="13" fill="#57606A" text-anchor="middle">随后查内核日志</text>
+  <text x="620" y="610" font-size="13" fill="#57606A" text-anchor="middle">确认 TUN 没报错</text>
+  <line x1="772" y1="578" x2="828" y2="578" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="620" y1="638" x2="620" y2="650" stroke="#E67700" stroke-width="2"/>
+  <rect x="470" y="650" width="300" height="64" rx="12" fill="#FFF3BF" stroke="#E67700" stroke-width="2"/>
+  <circle cx="496" cy="682" r="14" fill="#E67700"/>
+  <text x="496" y="687" font-size="15" font-weight="700" fill="#FFFFFF" text-anchor="middle">③</text>
+  <text x="520" y="678" font-size="14" font-weight="600" fill="#1B1F23">在 Clash Verge「订阅」页</text>
+  <text x="520" y="700" font-size="13" fill="#57606A">点一下当前订阅卡片</text>
+  <!-- Phase 5 · 验证 -->
+  <rect x="830" y="520" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="980" y="560" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 5 · 验证</text>
+  <text x="980" y="588" font-size="13" fill="#57606A" text-anchor="middle">verify.sh --save-baseline</text>
+  <text x="980" y="610" font-size="13" fill="#57606A" text-anchor="middle">六项全绿才算完成</text>
+  <line x1="1132" y1="578" x2="1188" y2="578" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="890" y="505" width="260" height="28" rx="8" fill="#FDECEC" stroke="#C92A2A" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="1020" y="524" font-size="12" font-weight="600" fill="#C92A2A" text-anchor="middle">红项 agent 去修 · 不全绿不宣布完成</text>
+  <!-- Phase 6 · 收尾 -->
+  <rect x="1190" y="520" width="300" height="116" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="1340" y="560" font-size="18" font-weight="600" fill="#1B1F23" text-anchor="middle">Phase 6 · 收尾</text>
+  <text x="1340" y="588" font-size="13" fill="#57606A" text-anchor="middle">agent 代你 ⌘Q 重启 Chrome / Claude</text>
+  <text x="1340" y="610" font-size="13" fill="#57606A" text-anchor="middle">检查系统地区是否 US</text>
+  <line x1="1340" y1="638" x2="1340" y2="650" stroke="#E67700" stroke-width="2"/>
+  <rect x="1190" y="650" width="300" height="64" rx="12" fill="#FFF3BF" stroke="#E67700" stroke-width="2"/>
+  <circle cx="1216" cy="682" r="14" fill="#E67700"/>
+  <text x="1216" y="687" font-size="15" font-weight="700" fill="#FFFFFF" text-anchor="middle">④</text>
+  <text x="1240" y="678" font-size="14" font-weight="600" fill="#1B1F23">去 claude.ai 撤销旧会话</text>
+  <text x="1240" y="700" font-size="13" fill="#57606A">重新登录</text>
+  <path d="M 1340 348 V 470 H 260 V 516" fill="none" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="800" y="462" font-size="13" fill="#57606A" text-anchor="middle">全自动，无需你操作</text>
+
+  <!-- 图例 -->
+  <rect x="110" y="770" width="22" height="22" rx="5" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="142" y="787" font-size="14" fill="#57606A">agent 自动完成</text>
+  <rect x="300" y="770" width="22" height="22" rx="5" fill="#FFF3BF" stroke="#E67700" stroke-width="2"/>
+  <text x="332" y="787" font-size="14" fill="#57606A">需要你动手（共 4 处）</text>
+  <rect x="530" y="770" width="22" height="22" rx="5" fill="#FDECEC" stroke="#C92A2A" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="562" y="787" font-size="14" fill="#57606A">STOP 条件：停下问你</text>
+
+  <text x="800" y="840" font-size="16" fill="#1B1F23" text-anchor="middle">全流程由 CLAUDE.md 驱动。任一阶段失败：bash scripts/rollback.sh &lt;部署id&gt; 一键回滚（改过的还原、新建的删除）。凭证全程不进 AI 对话。</text>
+</svg>

@@ -11,7 +11,7 @@
 | mihomo（Clash 系） | `dialer-proxy` |
 | Surge | `underlying-proxy` |
 | sing-box | `detour` |
-| Shadowrocket (iOS) | 代理链 / relay（版本能力不一） |
+| Shadowrocket (iOS) | 节点的「代理通过」字段（已验证，见 `iphone-notes.md`） |
 
 **② 三层规则圈住 Claude 流量**，全部导向 ① 的出口（顺序：进程 → 域名 → IP 段）：
 
@@ -42,4 +42,4 @@ curl https://api.ipify.org             # 必须等于机场节点 IP（≠静态
 | Surge (Mac) | 有链式和进程规则，理论可行，语法全部重写 |
 | sing-box 系 | 有 detour 与 process_name，理论可行，JSON 配置自己拼 |
 | 简易 V2ray 类 / 仅全局代理类 | ❌ 无进程分流或无链式，做不到等价效果 |
-| iOS 全部 | 无进程级能力，参见 `iphone-notes.md`（同为未验证思路） |
+| iOS 全部 | 无进程级能力，只能域名 + IP 两层；完整配方见 `iphone-notes.md`（已验证） |

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800" viewBox="0 0 1600 800" font-family="-apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4B5563"/>
+    </marker>
+    <marker id="arrow-grey" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- 卡片底 -->
+  <rect width="1600" height="800" rx="16" fill="#F5F2EC" stroke="#D9D4CA" stroke-width="2"/>
+
+  <!-- 标题 -->
+  <text x="64" y="68" font-size="30" font-weight="700" fill="#1B1F23">Claude 专线 · 只有 Claude 流量走链式静态住宅 IP</text>
+  <text x="64" y="100" font-size="16" fill="#57606A">Clash Verge Rev 规则分流 + dialer-proxy 两跳链式；其他流量按机场订阅原有规则走，不经过静态 IP</text>
+  <line x1="64" y1="124" x2="1536" y2="124" stroke="#D9D4CA" stroke-width="2"/>
+
+  <!-- 链式两跳的背景带 -->
+  <rect x="700" y="150" width="616" height="190" rx="18" fill="#E6F4EA" fill-opacity="0.45"/>
+  <text x="1304" y="330" font-size="13" fill="#1F7A45" text-anchor="end">链式代理 · 两跳（templates/1-proxies.yaml 的 dialer-proxy）</text>
+
+  <!-- 主流程：7 个盒子 y=180 h=132 -->
+  <!-- 1 本机 -->
+  <rect x="88" y="180" width="176" height="132" rx="14" fill="#E8F1FB" stroke="#2F6FBA" stroke-width="2"/>
+  <text x="176" y="226" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">本机 Claude</text>
+  <text x="176" y="256" font-size="13" fill="#57606A" text-anchor="middle">网页版 · 桌面版</text>
+  <text x="176" y="276" font-size="13" fill="#57606A" text-anchor="middle">Claude Code</text>
+
+  <!-- 2 Clash -->
+  <rect x="296" y="180" width="176" height="132" rx="14" fill="#EEE8FA" stroke="#6B4FBB" stroke-width="2"/>
+  <text x="384" y="226" font-size="20" font-weight="600" fill="#1B1F23" text-anchor="middle">Clash Verge Rev</text>
+  <text x="384" y="256" font-size="13" fill="#57606A" text-anchor="middle">TUN · 规则模式</text>
+  <text x="384" y="276" font-size="13" fill="#57606A" text-anchor="middle">mihomo 内核</text>
+
+  <!-- 3 策略组 Claude -->
+  <rect x="504" y="180" width="176" height="132" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <text x="592" y="226" font-size="20" font-weight="600" fill="#1B1F23" text-anchor="middle">策略组 Claude</text>
+  <text x="592" y="256" font-size="13" fill="#57606A" text-anchor="middle">type: select</text>
+  <text x="592" y="276" font-size="13" fill="#57606A" text-anchor="middle">唯一成员 US-Static</text>
+
+  <!-- 4 节点 US-Static -->
+  <rect x="712" y="180" width="176" height="132" rx="14" fill="#E6F4EA" stroke="#1F7A45" stroke-width="3"/>
+  <text x="800" y="222" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">🇺🇸 US-Static</text>
+  <text x="800" y="250" font-size="13" fill="#57606A" text-anchor="middle">type: socks5</text>
+  <text x="800" y="270" font-size="13" fill="#57606A" text-anchor="middle">udp: false</text>
+  <text x="800" y="290" font-size="13" fill="#57606A" text-anchor="middle">dialer-proxy: US-Chain</text>
+
+  <!-- 5 分组 US-Chain -->
+  <rect x="920" y="180" width="176" height="132" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <text x="1008" y="226" font-size="20" font-weight="600" fill="#1B1F23" text-anchor="middle">分组 US-Chain</text>
+  <text x="1008" y="256" font-size="13" fill="#57606A" text-anchor="middle">机场的美国节点</text>
+  <text x="1008" y="276" font-size="13" fill="#57606A" text-anchor="middle">第一跳：出境</text>
+
+  <!-- 6 静态住宅 IP -->
+  <rect x="1128" y="180" width="176" height="132" rx="14" fill="#E6F4EA" stroke="#1F7A45" stroke-width="2"/>
+  <text x="1216" y="226" font-size="20" font-weight="600" fill="#1B1F23" text-anchor="middle">美国静态住宅 IP</text>
+  <text x="1216" y="256" font-size="13" fill="#57606A" text-anchor="middle">第二跳 · ASN = ISP</text>
+  <text x="1216" y="276" font-size="13" fill="#57606A" text-anchor="middle">永久固定，只有你在用</text>
+
+  <!-- 7 Anthropic -->
+  <rect x="1336" y="180" width="176" height="132" rx="14" fill="#F1F3F5" stroke="#495057" stroke-width="2"/>
+  <text x="1424" y="222" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">Anthropic</text>
+  <text x="1424" y="250" font-size="13" fill="#57606A" text-anchor="middle">api.anthropic.com</text>
+  <text x="1424" y="270" font-size="13" fill="#57606A" text-anchor="middle">claude.ai</text>
+  <text x="1424" y="290" font-size="13" fill="#57606A" text-anchor="middle">看到的出口 = 静态 IP</text>
+
+  <!-- 主流程箭头 + 标签（y=246 中线） -->
+  <line x1="266" y1="246" x2="294" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="280" y="166" font-size="14" fill="#57606A" text-anchor="middle">TUN 接管</text>
+  <line x1="474" y1="246" x2="502" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="488" y="166" font-size="14" fill="#57606A" text-anchor="middle">命中 Claude 规则</text>
+  <line x1="682" y1="246" x2="710" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="696" y="166" font-size="14" fill="#57606A" text-anchor="middle">select</text>
+  <line x1="890" y1="246" x2="918" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="904" y="166" font-size="14" fill="#57606A" text-anchor="middle">dialer-proxy 链式</text>
+  <line x1="1098" y1="246" x2="1126" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="1112" y="166" font-size="14" fill="#57606A" text-anchor="middle">socks5 / TCP</text>
+  <line x1="1306" y1="246" x2="1334" y2="246" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="1320" y="166" font-size="14" fill="#57606A" text-anchor="middle">出口固定</text>
+
+  <!-- 分支：其他流量（从 Clash 盒底部下来） -->
+  <line x1="384" y1="314" x2="384" y2="438" stroke="#9CA3AF" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arrow-grey)"/>
+  <text x="400" y="385" font-size="14" fill="#57606A">MATCH（未命中 Claude 规则）</text>
+
+  <rect x="296" y="440" width="176" height="110" rx="14" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <text x="384" y="486" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">其他流量</text>
+  <text x="384" y="516" font-size="13" fill="#57606A" text-anchor="middle">非 Claude 的一切</text>
+
+  <line x1="474" y1="495" x2="710" y2="495" stroke="#9CA3AF" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arrow-grey)"/>
+  <text x="592" y="482" font-size="14" fill="#57606A" text-anchor="middle">按订阅原有规则</text>
+
+  <rect x="712" y="440" width="176" height="110" rx="14" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <text x="800" y="486" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">机场订阅规则</text>
+  <text x="800" y="516" font-size="13" fill="#57606A" text-anchor="middle">不受本方案影响</text>
+
+  <line x1="890" y1="495" x2="1126" y2="495" stroke="#9CA3AF" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arrow-grey)"/>
+  <text x="1008" y="482" font-size="14" fill="#57606A" text-anchor="middle">日本 / 香港 / …</text>
+
+  <rect x="1128" y="440" width="176" height="110" rx="14" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <text x="1216" y="486" font-size="22" font-weight="600" fill="#1B1F23" text-anchor="middle">原有出口节点</text>
+  <text x="1216" y="516" font-size="13" fill="#57606A" text-anchor="middle">随订阅，与静态 IP 无关</text>
+
+  <!-- 图例 -->
+  <rect x="88" y="610" width="22" height="22" rx="5" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
+  <text x="120" y="627" font-size="14" fill="#57606A">策略组 / 分组（templates/2-groups.yaml）</text>
+  <rect x="440" y="610" width="22" height="22" rx="5" fill="#E6F4EA" stroke="#1F7A45" stroke-width="2"/>
+  <text x="472" y="627" font-size="14" fill="#57606A">节点 / 静态 IP（templates/1-proxies.yaml）</text>
+  <rect x="800" y="610" width="22" height="22" rx="5" fill="#F8F9FA" stroke="#868E96" stroke-width="2"/>
+  <text x="832" y="627" font-size="14" fill="#57606A">其他流量（不动，走原订阅）</text>
+
+  <!-- 底部说明 -->
+  <text x="800" y="700" font-size="16" fill="#1B1F23" text-anchor="middle">静态住宅 IP 通常只接受美国来源的连接，所以先借机场美国节点出境（第一跳），再从美国连静态 IP（第二跳）。</text>
+  <text x="800" y="730" font-size="16" fill="#1B1F23" text-anchor="middle">Claude 之外的流量完全不经过静态 IP —— 住宅 IP 带宽小、流量贵，而且「只访问 Anthropic」本身就是最干净的画像。</text>
+</svg>

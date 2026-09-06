@@ -1,6 +1,6 @@
-# 排障手册（10 个真实踩过的坑）
+# 排障手册（12 个真实踩过的坑）
 
-按症状查。每条格式：症状 → 原因 → 处理。前 3 条及第 9、10 条是 2026-07 真机实战新增，其余继承自本仓库第一版。
+按症状查。每条格式：症状 → 原因 → 处理。前 3 条及第 9、10 条是 2026-07 真机实战新增，第 11、12 条来自 2026-08 在一台干净 Mac 上的远程部署，其余继承自本仓库第一版。
 
 ---
 
@@ -118,6 +118,50 @@ grep -iE 'datadoghq|statsig' "$HOME/Library/Application Support/io.github.clash-
 **处理**：每次仓库模板更新后，在**每一台**用本方案的机器上重跑一遍部署（agent 对齐 `templates/` → GUI 激活 → `verify.sh`）。`verify.sh` 第 3 项（规则完整性）就能自检本机是否落后。
 
 > 📌 **给拿到本仓库的新用户**：这条只在你有多台机器时相关。单机用户按 README 正常部署即可；多台机器的话，记住"仓库更新后每台都要重新对齐一次"。
+
+## 11. 干净 Mac 一跑命令就弹「Install Command Line Developer Tools」（2026-08 真实案例）
+
+**症状**：从没装过 Xcode 的 Mac 上，agent 一执行 `git clone` 或脚本一调用 `python3`，系统就弹出 1.5 GB 起步的命令行工具安装框；换 Claude Code / Codex / Grok 三个 agent 都卡在同一个框上。
+
+**原因**：macOS 自带的 `/usr/bin/git` 和 `/usr/bin/python3` 都是 Xcode 命令行工具（CLT）的壳命令，本身不可用。README 的前提「Claude Code 已能对话」在干净机器上不成立——卡住的不是 agent，是环境。
+
+**处理**（先铺平依赖，再让 agent 上）：
+
+- **git 完全不需要**：用 curl 下载 zip 代替 clone（`curl` / `unzip` 是 macOS 自带、不依赖 CLT）：
+  ```bash
+  cd ~ && curl -fL https://codeload.github.com/maien210/claude-lane/zip/refs/heads/main \
+    -o claude-lane.zip && unzip -oq claude-lane.zip && rm -rf claude-lane \
+    && mv claude-lane-main claude-lane && cd claude-lane && ls
+  ```
+- **python3 是真依赖**（`verify.sh` 和 `set-credentials.sh` 都要），但不必装 CLT——python.org 官方包只要 65 MB：
+  ```bash
+  curl --http1.1 -fL --progress-bar \
+    https://www.python.org/ftp/python/3.13.15/python-3.13.15-macos11.pkg \
+    -o ~/Downloads/python3.pkg
+  sudo installer -pkg ~/Downloads/python3.pkg -target /
+  /usr/local/bin/python3 --version    # 验证
+  rm ~/Downloads/python3.pkg
+  ```
+  （版本号以 python.org 当前稳定版为准）
+- agent 启动时习惯性探测 git 触发的弹框，**点「停止」即可**，不影响后续；可能会弹多次。
+
+## 12. 代理环境下载大文件报 `curl: (92) HTTP/2 stream … not closed cleanly`
+
+**症状**：经 Clash 下载几十 MB 以上的文件（安装脚本、二进制包）反复中断，报 `curl: (92) HTTP/2 stream 1 was not closed cleanly before end of the underlying stream`；有的安装脚本还会无限重试、又因为 `-s` 静默连进度都看不到。
+
+**原因**：代理链路上的 HTTP/2 长流不稳定，多路并发 range 请求更容易崩。
+
+**处理**：代理下任何大文件都带这三个参数：
+
+```bash
+curl --http1.1 -C - --progress-bar -fL <url> -o <file>
+```
+
+- `--http1.1` 避开 HTTP/2 崩流
+- `-C -` 断点续传（断了重跑同一条命令接着下）
+- `--progress-bar` 看得见进度
+
+> 文件已完整时再跑带 `-C -` 的命令会报 `curl: (22) … error: 416`——那是「没得续了」，**无害**，说明文件是好的。
 
 ---
 
