@@ -79,8 +79,8 @@ cd ~ && curl -fL https://codeload.github.com/maien210/claude-lane/zip/refs/heads
 | 平台 | 方案可用性 | 本仓库的自动化 |
 |---|---|---|
 | **macOS**（Apple Silicon / Intel） | ✅ 长期稳定使用 | ✅ **完整支持**：agent 全自动 + `verify.sh` 六项体检 |
-| **Windows** | ✅ 作者实测跑通并稳定用过 | ❌ 手动：照 `docs/manual-setup.md` 的思路，配置目录换成 `%APPDATA%` 下同名文件夹、`Google Chrome` 换成 `chrome.exe`，规则和模板照抄；验证用 `docs/porting.md` 里那两条命令 |
-| **iPhone / iOS** | ✅ 作者在用 | ❌ 手动，5 分钟：Shadowrocket 已验证配方见 [`docs/iphone-notes.md`](docs/iphone-notes.md) |
+| **Windows** | ✅ 作者实测跑通并稳定用过 | ⚠️ 半自动：远程协助用 `scripts/windows/` 四个 PowerShell 脚本（体检 / 配置 / 验收 / 诊断，2026-10 真机跑通），流程见 `.claude/skills/remote-setup/SKILL.md`；纯手工版见 [`docs/windows-setup.md`](docs/windows-setup.md) |
+| **iPhone / iOS** | ✅ 作者在用 | ❌ 手动：Shadowrocket 已验证配方见 [`docs/iphone-notes.md`](docs/iphone-notes.md)（配置 5 分钟；美区 Apple ID 那段要提前准备） |
 | Linux | ⚠️ 未试过 | ❌ 不支持（且 Claude 桌面版没有 Linux 版） |
 
 不用 Clash Verge 的（Surge / sing-box 等），看 `docs/porting.md`——那里把方案抽象成了平台无关的规格（未验证，不担保）。
@@ -142,7 +142,9 @@ bash scripts/verify.sh
 | `docs/troubleshooting.md` | 排障手册（12 个真实踩过的坑） |
 | `docs/faq.md` | 常见问题 + 购买 / 下载渠道 |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯 + 系统地区） |
-| `docs/iphone-notes.md` | iPhone（Shadowrocket）已验证配方 |
+| `docs/windows-setup.md` | Windows 图文部署手册（GUI 粘模板，不用脚本；截图待补） |
+| `docs/iphone-notes.md` | iPhone（Shadowrocket）已验证配方 + 美区 Apple ID 前置 |
+| `docs/helping-others.md` | 帮别人装机：三段异步 + 20 分钟同步的流程、门槛规则、发给对方的消息模板 |
 | `docs/porting.md` | 非 Clash Verge 客户端的移植规格（未验证，不担保） |
 | `docs/assets/` | README 里的三张图（SVG，可直接改） |
 | `VERSION` / `CHANGELOG.md` | 版本号唯一来源（脚本读它）/ 更新日志与分支路线图 |
