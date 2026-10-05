@@ -65,7 +65,7 @@ echo
 read -r -p "静态 IP 主机（host，如 198.51.100.10 或域名）: " HOST
 read -r -p "端口（port）: " PORT
 read -r -p "用户名（username）: " USERNAME
-read -r -s -p "密码（password，输入时不显示）: " PASSWORD; echo
+IFS= read -r -s -p "密码（password，输入时不显示）: " PASSWORD; echo   # IFS= 保住密码首尾空格
 echo
 
 [ -n "$HOST" ] && [ -n "$PORT" ] && [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] || { echo "❌ 四项都不能为空"; exit 1; }
@@ -98,7 +98,8 @@ block = "\n".join([
 ])
 old = io.open(f, encoding="utf-8").read() if os.path.exists(f) else ""
 if S in old and E in old:                       # 幂等：只替换既有托管块，别的内容一律不碰
-    new = re.sub(r"[ \t]*" + re.escape(S) + r".*?" + re.escape(E), block, old, flags=re.S)
+    # lambda：让 re.sub 把 block 当纯文本，否则密码里的反斜杠会被当成转义序列吃掉
+    new = re.sub(r"[ \t]*" + re.escape(S) + r".*?" + re.escape(E), lambda m: block, old, flags=re.S)
     io.open(f, "w", encoding="utf-8").write(new if new.endswith("\n") else new + "\n")
     print("MODE=replace")
 else:

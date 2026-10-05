@@ -23,7 +23,8 @@ SAVE_BASELINE=0
 CFG="${CLAUDE_LANE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 STATE="$CFG/claude-lane-state.json"
 SOCK="/tmp/verge/verge-mihomo.sock"
-LOG="$CFG/logs/service/service_latest.log"
+LOG="$CFG/service-logs/service/service_latest.log"            # Verge 2.5.x 的位置
+[ -r "$LOG" ] || LOG="$CFG/logs/service/service_latest.log"    # 旧版位置
 GEN="$CFG/clash-verge.yaml"
 FAIL=0
 # 版本号的唯一来源是仓库根目录的 VERSION 文件（别再往脚本里写死——v1.1.1 就写串过）
@@ -57,6 +58,7 @@ PROXY="$SCHEME://127.0.0.1:$PORT"
 echo "== Claude 专线验证 =="
 echo "   静态节点服务器: ${STATIC_IP:-未找到} | 本地代理端口: $PORT"
 [ -z "$STATIC_IP" ] && { bad "生成配置里找不到 US-Static 节点（Phase 3/4 没完成？）"; echo; }
+[ -r "$LOG" ] || warn "读不到内核日志 $LOG —— 下面「TUN 无启动错误」「无漏流」两项的 ✅ 不可信"
 
 echo "[1/6] 内核与 TUN"
 if curl -sS --max-time 5 --unix-socket "$SOCK" http://localhost/version >/dev/null 2>&1; then
