@@ -6,7 +6,7 @@
 
 ---
 
-## 未发布（仅文档与仓库结构，不 bump `VERSION`）
+## 未发布（不 bump `VERSION`：已部署的机器不需要重新对齐）
 
 - README 按「先说结论 → 为什么 → 怎么做 → 怎么验 → 红线」重排，249 行压到约 150 行；三段 ASCII 图换成 `docs/assets/` 下三张 SVG（核心链路 / agent 部署流程 / 分层规则匹配）
 - 红线收口为**三条**（不装第二个 VPN / 保持规则模式 / 改完 ⌘Q 重启）+ 两条提醒，与 `CLAUDE.md`、`docs/manual-setup.md` 的「三条红线」措辞对齐
@@ -14,7 +14,11 @@
 - `docs/iphone-notes.md` 从"步骤未整理"的桩变成完整的 Shadowrocket 配方（2026-08 真机验证）
 - 排障手册新增第 11 条（干净 Mac 的 git / python3 依赖）、第 12 条（代理下大文件 HTTP/2 崩流）
 - 内部笔记移入 `docs/internal/`（gitignored）；`.gitignore` 补上 `.env`、`.mirror-work/`
-- 模板、脚本、`VERSION` 均未改动：已部署的机器**不需要**重新对齐
+- `set-credentials.sh`：密码里的反斜杠不再被当成转义吃掉（`re.sub` 替换串改用 lambda）；`read` 加 `IFS=` 保住密码首尾空格
+- `verify.sh`：Verge 2.5.x 的内核日志在 `service-logs/service/`，旧路径读不到导致「TUN 无启动错误」「无漏流」两项**假阴性打勾**；现在先找新路径再回退，都读不到时打黄色警告
+- 新增 `scripts/windows/`（体检 / 配置 / 验收 / 诊断四个 PowerShell 脚本）+ 协助者技能 `.claude/skills/remote-setup/`：agent 留在协助者本机、对方 Windows 只开远程终端即可部署，2026-10-05 经网易 UU 远程真机跑通
+- 新增 `docs/helping-others.md`（帮人装机流程与消息模板）、`docs/windows-setup.md`（Windows 纯手工图文骨架）；`docs/iphone-notes.md` 补美区 Apple ID 前置
+- 模板与 `VERSION` 未改动：已部署的机器**不需要**重新对齐
 
 ## v1.2.1 — 2026-07-26
 
