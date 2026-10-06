@@ -171,6 +171,62 @@ PY
 )
 [ -z "$LINT" ] && ok "所有脚本都用了 \${VAR} 形式" || ng "这些位置有隐患：${LINT}"
 
+echo "[9] add-static.rb：加第二个静态 IP 只插入文本，不能抹掉 managed 标记和注释（旧版整份 YAML.dump 抹过）"
+CFG9="$SANDBOX/cfg9"; mkdir -p "$CFG9"
+cat > "$SANDBOX/t9.rb" <<'RB'
+require ARGV[0]
+base = ARGV[1]
+NODE = { 'name' => '🇺🇸 US-Static-2', 'type' => 'socks5', 'server' => '203.0.113.7', 'port' => 11324,
+         'username' => 'u2', 'password' => %q{p'a:ss"w\d}, 'udp' => false, 'dialer-proxy' => 'US-Chain' }
+RUNTIME = "proxies:\n- {name: \"🇺🇸 US-Static\", type: socks5}\nproxy-groups:\n- {name: Claude, type: select, proxies: [\"🇺🇸 US-Static\"]}\n- {name: US-Chain, type: select, proxies: [a]}\n"
+CASES = {
+  # set-credentials.sh 写出来的样子：两格缩进 + managed 标记 + 行尾注释
+  'template' => [
+    "# 由 claude-lane 的 set-credentials.sh 写入\nprepend: []\n\nappend:\n  # claude-lane managed start\n  - name: \"🇺🇸 US-Static\"\n    type: socks5                      # 必须 socks5\n    server: \"198.51.100.10\"\n    port: 12324\n    udp: false\n    dialer-proxy: \"US-Chain\"\n  # claude-lane managed end\n\ndelete: []\n",
+    "# 模板②\nprepend:\n  # Claude 流量的最终出口\n  - name: \"Claude\"\n    type: select\n    proxies:\n      - \"🇺🇸 US-Static\"\n\n  - name: \"US-Chain\"\n    type: select\n    proxies:\n      - \"a\"\n\nappend: []\n\ndelete: []\n"],
+  # 旧版 add-static.rb 整份 YAML.dump 之后的样子：顶格「- 」+ 转义 emoji + ---
+  'dumped' => [
+    "---\nprepend: []\nappend:\n- name: \"\\U0001F1FA\\U0001F1F8 US-Static\"\n  type: socks5\n  port: 1\ndelete: []\n",
+    "---\nprepend:\n- name: Claude\n  type: select\n  proxies:\n  - \"\\U0001F1FA\\U0001F1F8 US-Static\"\n- name: US-Chain\n  type: select\n  proxies:\n  - a\nappend: []\ndelete: []\n"],
+  # 空 append + 分组用行内列表
+  'flow' => [
+    "prepend:\n  - {name: \"🇺🇸 US-Static\", type: socks5}\nappend: []\ndelete: []\n",
+    "prepend:\n  - name: Claude\n    type: select\n    proxies: [\"🇺🇸 US-Static\"]\n  - {name: US-Chain, type: select, proxies: [a]}\n"]
+}
+CASES.each do |name, (ptxt, gtxt)|
+  cfg = File.join(base, name)
+  Dir.mkdir(cfg) rescue nil
+  Dir.mkdir(File.join(cfg, 'profiles')) rescue nil
+  File.write(File.join(cfg, 'profiles.yaml'), "current: SUB\nitems:\n- uid: SUB\n  type: remote\n  option:\n    proxies: pX\n    groups: gX\n")
+  File.write(File.join(cfg, 'profiles', 'pX.yaml'), ptxt)
+  File.write(File.join(cfg, 'profiles', 'gX.yaml'), gtxt)
+  File.write(File.join(cfg, 'clash-verge.yaml'), RUNTIME)
+  begin
+    changes, = second_static_changes(cfg, NODE)
+    pnew = changes[File.join(cfg, 'profiles', 'pX.yaml')]
+    gnew = changes[File.join(cfg, 'profiles', 'gX.yaml')]
+    File.write(File.join(cfg, 'profiles', 'pX.yaml'), pnew)
+    File.write(File.join(cfg, 'profiles', 'gX.yaml'), gnew)
+    p = YAML.safe_load(pnew); g = YAML.safe_load(gnew)
+    puts(p['append'].last == NODE ? "OK #{name}：新节点写入且值无损（密码含 ' : \" \\）" : "NG #{name}：新节点不对 #{p['append'].last.inspect}")
+    claude = (g['prepend'] || []).find { |x| x['name'] == 'Claude' }
+    puts(claude['proxies'] == ['🇺🇸 US-Static', '🇺🇸 US-Static-2'] ? "OK #{name}：Claude 分组追加了 US-Static-2" : "NG #{name}：Claude 分组 #{claude['proxies'].inspect}")
+    lost = (ptxt.lines + gtxt.lines).map(&:rstrip).select { |l| l.strip.start_with?('#') } - (pnew.lines + gnew.lines).map(&:rstrip)
+    puts(lost.empty? ? "OK #{name}：注释和 managed 标记一行没丢" : "NG #{name}：丢了 #{lost.inspect}")
+  rescue => e
+    puts "NG #{name}：抛错 #{e.class}: #{e.message}"
+  end
+end
+RB
+while IFS= read -r line; do
+  case "$line" in OK\ *) ok "${line#OK }" ;; NG\ *) ng "${line#NG }" ;; *) ng "ruby 输出异常：${line}" ;; esac
+done < <(ruby "$SANDBOX/t9.rb" "$HERE/add-static.rb" "$CFG9" 2>&1)
+# 加完第二条以后，set-credentials.sh 还能找到托管块、只替换第一条（这正是旧版坏掉的地方）
+OUT=$(printf '198.51.100.99\n12324\nu1\np1\n' | CLAUDE_LANE_CFG="$CFG9/template" bash "$HERE/set-credentials.sh" 2>&1); RC=$?
+P9="$CFG9/template/profiles/pX.yaml"
+[ "$RC" = "0" ] && printf '%s' "$OUT" | grep -q 'MODE=replace\|凭证已写入' && ok "加完第二条后 set-credentials 仍能替换托管块" || ng "加完第二条后 set-credentials 失败（退出码 ${RC}）"
+grep -q '198.51.100.99' "$P9" && grep -q 'US-Static-2' "$P9" && ok "第一条凭证已更新，第二条原样保留" || ng "替换后第一条没更新或第二条丢了"
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   printf '\033[32m== 全部 %s 项通过 ==\033[0m\n' "$PASS"

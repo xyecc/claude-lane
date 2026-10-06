@@ -18,6 +18,7 @@
 - `verify.sh`：Verge 2.5.x 的内核日志在 `service-logs/service/`，旧路径读不到导致「TUN 无启动错误」「无漏流」两项**假阴性打勾**；现在先找新路径再回退，都读不到时打黄色警告
 - 新增 `scripts/windows/`（体检 / 配置 / 验收 / 诊断四个 PowerShell 脚本）+ 协助者技能 `.claude/skills/remote-setup/`：agent 留在协助者本机、对方 Windows 只开远程终端即可部署，2026-10-05 经网易 UU 远程真机跑通
 - 新增 `docs/helping-others.md`（帮人装机流程与消息模板）、`docs/windows-setup.md`（Windows 纯手工图文骨架）；`docs/iphone-notes.md` 补美区 Apple ID 前置
+- 新增 `scripts/add-static.rb`（同一台 Mac 加第二个静态 IP，作为 Claude 分组里的备选）：改为**插入文本**写入，不再整份 `YAML.dump` 重写——旧写法会抹掉 `# claude-lane managed` 标记，之后 `set-credentials.sh` 只能报冲突；写入前自证「解析结果 = 旧内容 + 新节点」且注释一行不丢。`selftest.sh` 新增第 9 组（3 种文件形态 + 加完后 set-credentials 仍能替换），用例 31 → **42**
 - 模板与 `VERSION` 未改动：已部署的机器**不需要**重新对齐
 
 ## v1.2.1 — 2026-07-26
