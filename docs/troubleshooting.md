@@ -129,7 +129,7 @@ grep -iE 'datadoghq|statsig' "$HOME/Library/Application Support/io.github.clash-
 
 - **git 完全不需要**：用 curl 下载 zip 代替 clone（`curl` / `unzip` 是 macOS 自带、不依赖 CLT）：
   ```bash
-  cd ~ && curl -fL https://codeload.github.com/maien210/claude-lane/zip/refs/heads/main \
+  cd ~ && curl -fL https://codeload.github.com/xyecc/claude-lane/zip/refs/heads/main \
     -o claude-lane.zip && unzip -oq claude-lane.zip && rm -rf claude-lane \
     && mv claude-lane-main claude-lane && cd claude-lane && ls
   ```

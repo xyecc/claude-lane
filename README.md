@@ -46,7 +46,7 @@
 ### 快速开始
 
 ```bash
-git clone https://github.com/maien210/claude-lane
+git clone https://github.com/xyecc/claude-lane
 cd claude-lane
 claude
 ```
@@ -54,7 +54,7 @@ claude
 没有 git 的干净机器用 zip（`curl` / `unzip` 是 macOS 自带）：
 
 ```bash
-cd ~ && curl -fL https://codeload.github.com/maien210/claude-lane/zip/refs/heads/main -o claude-lane.zip \
+cd ~ && curl -fL https://codeload.github.com/xyecc/claude-lane/zip/refs/heads/main -o claude-lane.zip \
   && unzip -oq claude-lane.zip && mv claude-lane-main claude-lane && cd claude-lane && claude
 ```
 
