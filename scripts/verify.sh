@@ -20,12 +20,11 @@ fi
 SAVE_BASELINE=0
 [ "${1:-}" = "--save-baseline" ] && SAVE_BASELINE=1
 
-CFG="${CLAUDE_LANE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# socket / 内核日志的位置随 Verge 版本变（2.5.8 起 socket 在 /var/run/clash-verge-service/…，日志在 root 目录读不到），
+# 一律交给 probe.sh 自动探测，别再写死（v1.2.1 写死 /tmp/verge/… 在 2.5.8 上直接崩了三项）。见 docs/compatibility.md
+. "$HERE/probe.sh"      # 设置 CFG / GEN / SOCK（找不到为空）/ LOG（读不到为空）
 STATE="$CFG/claude-lane-state.json"
-SOCK="/tmp/verge/verge-mihomo.sock"
-LOG="$CFG/service-logs/service/service_latest.log"            # Verge 2.5.x 的位置
-[ -r "$LOG" ] || LOG="$CFG/logs/service/service_latest.log"    # 旧版位置
-GEN="$CFG/clash-verge.yaml"
 FAIL=0
 # 版本号的唯一来源是仓库根目录的 VERSION 文件（别再往脚本里写死——v1.1.1 就写串过）
 REPO_VERSION=$(tr -d '\r\n ' < "$(cd "$(dirname "$0")/.." && pwd)/VERSION" 2>/dev/null)
@@ -35,6 +34,20 @@ ok()   { printf '  \033[32m✅ %s\033[0m\n' "$1"; }
 bad()  { printf '  \033[31m❌ %s\033[0m\n' "$1"; FAIL=$((FAIL+1)); }
 note() { printf '     %s\n' "$1"; }
 warn() { printf '  \033[33m⚠️  %s\033[0m\n' "$1"; }
+# 把 lanecheck.py 的 OK/NG/WARN/NOTE 行渲染成彩色（只渲染，不计数；计数看 lanecheck 的退出码）
+render() {
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      "OK "*)   printf '  \033[32m✅ %s\033[0m\n' "${line#OK }" ;;
+      "NG "*)   printf '  \033[31m❌ %s\033[0m\n' "${line#NG }" ;;
+      "WARN "*) warn "${line#WARN }" ;;
+      "NOTE "*) note "${line#NOTE }" ;;
+      *)        note "$line" ;;
+    esac
+  done
+}
+api() { curl -sS --max-time 8 --unix-socket "$SOCK" "http://localhost/$1" 2>/dev/null; }
 
 # 自动发现：静态节点服务器 IP、混合端口
 STATIC_IP=$(python3 - "$GEN" <<'PY'
@@ -58,26 +71,39 @@ PROXY="$SCHEME://127.0.0.1:$PORT"
 echo "== Claude 专线验证 =="
 echo "   静态节点服务器: ${STATIC_IP:-未找到} | 本地代理端口: $PORT"
 [ -z "$STATIC_IP" ] && { bad "生成配置里找不到 US-Static 节点（Phase 3/4 没完成？）"; echo; }
-[ -r "$LOG" ] || warn "读不到内核日志 $LOG —— 下面「TUN 无启动错误」「无漏流」两项的 ✅ 不可信"
+[ -n "$LOG" ] || note "内核日志读不到（Verge 2.5.8 起写在 root 目录，正常）→ 第 1 项改用路由检查、第 5 项改用实时连接扫描"
 
 echo "[1/6] 内核与 TUN"
-if curl -sS --max-time 5 --unix-socket "$SOCK" http://localhost/version >/dev/null 2>&1; then
-  ok "mihomo API 可达"
+if [ -n "$SOCK" ]; then
+  ok "mihomo API 可达（$(lane_mihomo_ver "$SOCK")，${SOCK}）"
 else
-  bad "mihomo API 不可达（Clash 没在跑，或非 unix-socket 模式）"
+  bad "mihomo API 不可达：Clash 没在跑，或 socket 不在已知位置（跑 bash scripts/probe.sh 看试过哪些路径，对照 docs/compatibility.md）"
 fi
-if tail -50 "$LOG" 2>/dev/null | grep -q "Start TUN listening error"; then
+if [ -n "$LOG" ] && tail -50 "$LOG" 2>/dev/null | grep -q "Start TUN listening error"; then
   bad "TUN 启动失败（add route: file exists → 有其他 VPN 占路由，见排障手册第 1 条）"
+elif [ -n "$SOCK" ]; then
+  # 不依赖日志的判法：TUN 开着，且发往 Anthropic 的流量确实路由到 Clash 的 TUN 网卡
+  TUN_INFO=$(api configs | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tun") or {}; print("on" if t.get("enable") else "off", t.get("device") or "")' 2>/dev/null)
+  TUN_STATE=${TUN_INFO%% *}; TUN_DEV=${TUN_INFO#* }
+  ROUTE_IF=$(route -n get 160.79.104.10 2>/dev/null | awk '/interface:/{print $2}')
+  if [ "$TUN_STATE" != "on" ]; then
+    bad "TUN 模式没开（Verge 设置里打开 TUN，保持规则模式）"
+  elif { [ -n "$TUN_DEV" ] && [ "$ROUTE_IF" = "$TUN_DEV" ]; } || { [ -z "$TUN_DEV" ] && [ "${ROUTE_IF#utun}" != "$ROUTE_IF" ]; }; then
+    ok "TUN 已接管路由（Anthropic 流量走 ${ROUTE_IF}）"
+  else
+    bad "Anthropic 流量路由到了 ${ROUTE_IF:-未知网卡}，不是 Clash 的 ${TUN_DEV:-TUN}——有别的 VPN 占着路由（排障手册第 1 条）"
+  fi
 else
-  ok "TUN 无启动错误"
+  bad "API 不可达、日志也读不到，无法判断 TUN 状态"
 fi
 
 echo "[2/6] 策略组状态"
-python3 - "$SOCK" <<'PY' || FAIL=$((FAIL+1))
-import json, subprocess, sys
-out = subprocess.run(["curl","-sS","--max-time","8","--unix-socket",sys.argv[1],
-                      "http://localhost/proxies"], capture_output=True, text=True).stdout
-data = json.loads(out)["proxies"]
+if [ -z "$SOCK" ]; then
+  bad "跳过：mihomo API 不可达（见第 1 项）"
+else
+api proxies | python3 -c '
+import json, sys
+data = json.load(sys.stdin)["proxies"]
 fails = []
 cl = data.get("Claude", {})
 if "US-Static" in str(cl.get("now")): print("  \033[32m✅ Claude 组 → %s\033[0m" % cl.get("now"))
@@ -91,45 +117,19 @@ if wrong: fails.append("这些组误选了静态节点（普通流量会走静�
 else: print("  \033[32m✅ 无其他组误用静态节点\033[0m")
 for f in fails: print("  \033[31m❌ %s\033[0m" % f)
 sys.exit(1 if fails else 0)
-PY
+' || FAIL=$((FAIL+1))
+fi
 
 echo "[3/6] 规则完整性"
-python3 - "$SOCK" <<'PY' || FAIL=$((FAIL+1))
-import json, subprocess, sys
-out = subprocess.run(["curl","-sS","--max-time","8","--unix-socket",sys.argv[1],
-                      "http://localhost/rules"], capture_output=True, text=True).stdout
-rules = json.loads(out)["rules"]
-fails = []
-head = rules[:12]
-if any("Google Chrome" in r["payload"] and r["proxy"]=="REJECT" for r in head):
-    print("  \033[32m✅ Chrome QUIC 拦截在规则最前\033[0m")
-else: fails.append("规则最前面没有 Chrome QUIC 拦截（漏流风险，检查模板③顺序）")
-glb = [r for r in rules if r["proxy"]=="REJECT" and "udp" in r["payload"].lower()
-       and "443" in r["payload"] and "ProcessName" not in r["payload"]]
-if glb: fails.append("存在全局 UDP/443 REJECT（误伤全机 HTTP/3，应删除）")
-else: print("  \033[32m✅ 无全局 UDP/443 拦截\033[0m")
-if any(r["payload"]=="claude.com" for r in rules if r["type"]=="DomainSuffix"):
-    print("  \033[32m✅ claude.com 域名规则存在\033[0m")
-else: fails.append("缺 DOMAIN-SUFFIX,claude.com 规则")
-if any("datadoghq" in r["payload"] for r in rules):
-    print("  \033[32m✅ 遥测域名规则存在\033[0m")
-else: fails.append("缺遥测域名规则（DOMAIN-SUFFIX,http-intake.logs.us5.datadoghq.com,Claude）——进程规则抓不到它，会漏到默认节点，见排障手册第 9 条")
-# 进程规则核对：不看"有没有写 claude.exe"，看当前【真实在跑】的 Claude 进程有没有对应规则。
-# （磁盘文件叫 claude.exe，但 mihomo 匹配的是 ps comm，macOS 上实测是小写 claude——只写 exe 会静默漏遥测）
-running = sorted({l.rsplit("/",1)[-1].strip() for l in subprocess.run(
-    ["ps","-axo","comm"], capture_output=True, text=True).stdout.splitlines()
-    if "claude" in l.rsplit("/",1)[-1].lower()})
-ruled = {r["payload"] for r in rules if r["type"]=="ProcessName"}
-missing = [p for p in running if p not in ruled]
-if not running:
-    print("  \033[33m⚠️ 当前没有 Claude 进程在跑，跳过进程规则核对（开着 Claude 再跑一次更准）\033[0m")
-elif missing:
-    fails.append("这些正在运行的 Claude 进程没有对应规则（遥测会漏到默认节点）: %s" % missing)
-else:
-    print("  \033[32m✅ 在跑的 Claude 进程都有对应规则（%s）\033[0m" % ", ".join(running))
-for f in fails: print("  \033[31m❌ %s\033[0m" % f)
-sys.exit(1 if fails else 0)
-PY
+# 不看"规则文本里有没有某几个字"，而是拿【此刻真实在跑】的浏览器 / Claude 进程（取法与 mihomo 相同）逐个去对规则：
+# 进程名会随上游版本变（Chrome 156 的 Aperitif、Claude Code 原生版的版本号进程名），只查文本会一直假绿。
+if [ -z "$SOCK" ]; then
+  bad "跳过：mihomo API 不可达（见第 1 项）"
+else
+  OUT=$(api rules | python3 "$HERE/lanecheck.py" rules - 2>&1); RC=$?
+  printf '%s\n' "$OUT" | render
+  [ "$RC" -eq 0 ] || FAIL=$((FAIL+1))
+fi
 
 echo "[4/6] 出口双验（关键）"
 # 先探本地代理端口；不通时直接给原因，跳过双验避免误报成"出口错误"
@@ -184,18 +184,30 @@ except Exception: print('')" 2>/dev/null)
   fi
 fi
 
-echo "[5/6] 日志漏流扫描"
+echo "[5/6] 漏流扫描"
+# ① 实时连接（不依赖日志，任何 Verge 版本都能做）：Claude 相关连接是否都走了 Claude 组、
+#    浏览器 / Claude 进程有没有漏网的 UDP（QUIC）。只能看到此刻开着的连接，所以开着 claude.ai 跑更准。
+if [ -n "$SOCK" ]; then
+  OUT=$(api connections | python3 "$HERE/lanecheck.py" conns - 2>&1); RC=$?
+  printf '%s\n' "$OUT" | render
+  [ "$RC" -eq 0 ] || FAIL=$((FAIL+1))
+fi
+# ② 内核日志（读得到才做，能看到激活以来的历史连接）
 # 假设：mihomo 日志行首时间戳格式为 [YYYY-MM-DD HH:MM:SS…（靠字符串比较过滤激活前的旧日志）。
 # 若日志格式变更，过滤会静默失效——激活前的旧漏流记录也会被算进来，出现莫名其妙的红项时先人工看日志时间。
-ACTIVATED_AT=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$GEN" 2>/dev/null)
-LEAK=$(awk -v start="[$ACTIVATED_AT" 'start == "[" || $0 >= start' "$LOG" 2>/dev/null \
-       | tail -800 | grep -iE "claude|anthropic|datadoghq|statsig" | grep " using " \
-       | grep -v "using Claude\[" | grep -v "using REJECT" | tail -5)
-if [ -z "$LEAK" ]; then
-  ok "本次激活后无 Claude/Anthropic 流量走到非 Claude 组"
-else
-  bad "本次激活后发现漏流记录（Claude 流量走了别的组）："
-  echo "$LEAK" | while IFS= read -r l; do note "$l"; done
+if [ -n "$LOG" ]; then
+  ACTIVATED_AT=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$GEN" 2>/dev/null)
+  LEAK=$(awk -v start="[$ACTIVATED_AT" 'start == "[" || $0 >= start' "$LOG" 2>/dev/null \
+         | tail -800 | grep -iE "claude|anthropic|datadoghq|statsig" | grep " using " \
+         | grep -v "using Claude\[" | grep -v "using REJECT" | tail -5)
+  if [ -z "$LEAK" ]; then
+    ok "日志：本次激活后无 Claude/Anthropic 流量走到非 Claude 组"
+  else
+    bad "日志：本次激活后发现漏流记录（Claude 流量走了别的组）："
+    echo "$LEAK" | while IFS= read -r l; do note "$l"; done
+  fi
+elif [ -z "$SOCK" ]; then
+  bad "API 不可达、日志也读不到，漏流扫描无法进行"
 fi
 
 echo "[6/6] 其他 VPN 检测"
@@ -216,6 +228,8 @@ if [ -z "$DEPLOYED_VERSION" ]; then
   note "本机还没记录部署版本（跑一次 bash scripts/verify.sh --save-baseline 记下来）"
 elif [ "$DEPLOYED_VERSION" = "$REPO_VERSION" ]; then
   ok "版本一致（${REPO_VERSION}）"
+elif [ "$SAVE_BASELINE" = "1" ]; then
+  note "本机记录是 ${DEPLOYED_VERSION}；本次 --save-baseline 全绿则改记为 ${REPO_VERSION}（前提：已按 templates/ 对齐并在 GUI 激活）"
 else
   warn "配置漂移：本机是 ${DEPLOYED_VERSION}，仓库已到 ${REPO_VERSION}"
   note "仓库模板更新不会自动同步到已部署的机器（见排障手册第 10 条）。"

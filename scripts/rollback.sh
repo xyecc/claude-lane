@@ -10,7 +10,8 @@ set -euo pipefail
 
 CFG="${CLAUDE_LANE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 ROOT="$CFG/claude-lane-backups"
-SOCK="/tmp/verge/verge-mihomo.sock"
+# socket 位置随 Verge 版本变（见 docs/compatibility.md），探测不到时退回老位置，只用于下面的提示文字
+SOCK=$(bash "$(dirname "$0")/probe.sh" --sock 2>/dev/null || echo /tmp/verge/verge-mihomo.sock)
 
 [ -d "$ROOT" ] || { echo "没有任何备份点（${ROOT} 不存在）"; exit 1; }
 

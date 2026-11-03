@@ -7,8 +7,10 @@
 通用约定：
 
 - Clash Verge Rev 配置目录：`$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev`（下文记作 `$CFG`）
-- Mihomo 控制 API 走 unix socket：`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/<endpoint>`（若 socket 不存在，读 `$CFG/clash-verge.yaml` 里的 `external-controller` 换 TCP 方式）
-- 内核日志：`$CFG/logs/service/service_latest.log`
+- **路径和进程名会随上游版本变，一律探测，不要写死、不要凭记忆**（已知差异全在 `docs/compatibility.md`）：
+  - Mihomo 控制 API：先 `SOCK=$(bash scripts/probe.sh --sock)`，再 `curl --unix-socket "$SOCK" http://localhost/<endpoint>`。Verge 2.5.8 的 socket 在 `/var/run/clash-verge-service/users/<uid>/`，老版本在 `/tmp/verge/`，而且生成配置里写的路径不可信
+  - 内核日志：`bash scripts/probe.sh` 会告诉你读不读得到。2.5.8 起写在 root 目录，**读不到是正常的**，用 API 的 `/connections` 代替看日志
+  - 进程名：以 mihomo `/connections` 里的 `process` / `processPath` 为准，**不要用 `ps` 看**。Claude Code 在 `ps` 里叫 `claude`，在 mihomo 里叫 `2.1.316`
 - **一次部署共用一个 deployment id**：进入 Phase 2 之前先定一个（`date +%Y%m%d-%H%M%S` 的值），**之后每次调用 `backup.sh` 都带上它**，这样整次部署的改动都落进同一个备份点、能被一次性回滚：
   ```bash
   export CLAUDE_LANE_DEPLOY_ID=$(date +%Y%m%d-%H%M%S)   # 本次部署固定用这个
@@ -41,7 +43,12 @@ STOP 条件：用户不肯退出旧代理软件；用户拿不到订阅链接。
 
 依次检查，汇总成一份体检报告给用户看，全部通过才进 Phase 1：
 
-1. **Clash 在跑**：`pgrep -fl verge-mihomo` 有进程，且 `curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 返回版本 JSON
+0. **环境探测与版本兼容**：跑 `bash scripts/probe.sh`，把输出原样放进体检报告。逐条处理它的提示：
+   - ❌ 找不到 socket / mihomo 低于 v1.18.5 → STOP。前者按 `docs/compatibility.md` 最后一节排查；后者让用户先升级 Clash Verge（模板③用到的正则进程规则要求 ≥ v1.18.5）
+   - ⚠️ Clash Verge 版本没有实机验证记录 → 可以继续，但要告诉用户「这个版本没验证过」，并且 Phase 5 必须做到所有项都真的执行了（不能因为读不到、连不上而跳过）。发现新差异，按 `docs/compatibility.md` 最后一节补记录
+   - ⚠️ Chrome 有更新待重启 → 记下来，Phase 6 重启 Chrome 后重跑一次 `verify.sh`（进程名可能跟着变）
+   - **本机以前已经部署过**（`$CFG/claude-lane-state.json` 存在，或订阅的增强文件里已有 `US-Static`）→ 不走全新部署，转下文「已部署的机器：升级对齐」一节
+1. **Clash 在跑**：`pgrep -fl verge-mihomo` 有进程，且 `probe.sh` 找到了能应答的 socket
 2. **TUN + 规则模式**：`$CFG/clash-verge.yaml` 里 `tun:` 段 `enable: true`；`mode: rule`
 3. **订阅已导入且含美国节点**：API `GET /proxies`，在节点名里搜（不区分大小写）「美国 | US | USA | America | United States | 🇺🇸 | Los Angeles | LA | San Jose | Seattle | Dallas | Phoenix | Ashburn | LAX | SJC」，把找到的美国节点名列出来（Phase 1 要用）。注意 `US` 会误匹配 `AUS`（澳洲）/`RUS`（俄罗斯），人工过一遍剔除。**一个都没搜到时不要直接 STOP**：先把订阅的完整节点名列表贴给用户人工指认（机场命名千奇百怪），用户确认确实没有美国节点才停
 4. **排查其他 VPN（红线）**：`scutil --nc list`，除 Tailscale 外任何处于 `(Connected)` 的 VPN（尤其 Shadowrocket）都必须先让用户断开并建议卸载。**STOP：用户不处理就不继续**——这是实测导致整机断网的雷。
@@ -95,7 +102,7 @@ bash scripts/backup.sh "$CFG/profiles.yaml" \
 
 1. `templates/1-proxies.yaml` → proxies 文件：**这个文件由用户跑 `scripts/set-credentials.sh` 写，你不要自己填凭证**。已经跑过就跳过，只核对结果：`grep -c 'US-Static' "$CFG/profiles/<proxies uid>.yaml"`，以及 `type: socks5` / `udp: false` / `dialer-proxy: "US-Chain"` 三项在不在（**一个都不能少**）
 2. `templates/2-groups.yaml` → groups 文件：US-Chain 里填 Phase 1 确认的真实美国节点名（**必须和订阅里的名字逐字一致，含 emoji 和空格**）
-3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（QUIC 拦截必须在最前）；同时覆盖桌面版的 `Claude` / `Claude Helper` 与 Claude Code 的 `claude.exe`
+3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（QUIC 拦截必须在最前）。它已经覆盖了 Chrome（正则匹配，能扛住 Helper 改名）、Claude 桌面版全家，以及 Claude Code（按名字 `claude` / `claude.exe`，外加按安装路径匹配原生安装版的版本号进程名）。**不要把正则规则改回精确名**，原因见 `docs/compatibility.md`。写入后可以先离线核对一次：`python3 scripts/lanecheck.py rules "$CFG/profiles/<rules uid>.yaml"`（会拿本机在跑的进程逐个对规则）
 4. `templates/4-merge.yaml` → merge 文件：sniffer 段照抄（若用户 merge 文件里已有其他顶层配置，保留并追加 sniffer 段）
 
 **不要默认加支付规则**：`templates/optional-payment-rules.yaml` 默认不启用（副作用是任何网站的 Stripe/Google Pay 付款都走静态 IP，且 Claude 订阅本来就不收中国大陆发行的卡）。只有用户主动提出"想让订阅付款也走这条线"才加，加之前把副作用讲清楚。
@@ -104,15 +111,13 @@ bash scripts/backup.sh "$CFG/profiles.yaml" \
 
 **首选（最稳）**：让用户在 Clash Verge GUI 左侧「订阅」页**点一下当前订阅卡片**（触发重新合并 + 内核加载）。
 
-备选（用户不在 GUI 旁）：`curl -X PUT --unix-socket /tmp/verge/verge-mihomo.sock "http://localhost/configs?force=true" -H "Content-Type: application/json" -d "{\"path\":\"$CFG/clash-verge.yaml\"}"`——注意热重载**不会**重新合并增强文件，只适用于你直接改过生成文件的场景；正常流程用 GUI 激活。
+备选（用户不在 GUI 旁）：`curl -X PUT --unix-socket "$SOCK" "http://localhost/configs?force=true" -H "Content-Type: application/json" -d "{\"path\":\"$CFG/clash-verge.yaml\"}"`——注意热重载**不会**重新合并增强文件，只适用于你直接改过生成文件的场景；正常流程用 GUI 激活。
 
 激活后**必查**（真机部署时踩过的坑）：
+- 新规则真的加载了：`curl -s --unix-socket "$SOCK" http://localhost/rules | python3 scripts/lanecheck.py rules -`。如果模板③的正则规则不在里面，说明内核拒绝了这份配置（GUI 会报错）→ 用 `probe.sh` 查 mihomo 版本
+- TUN 起来了：`verify.sh` 第 1 项会查「发往 Anthropic 的路由是否经过 TUN 网卡」。日志读得到时也可以直接看 `grep -i "Start TUN listening error" "<probe.sh 给出的日志路径>"`
 
-```bash
-tail -20 "$CFG/logs/service/service_latest.log" | grep -i "Start TUN listening error"
-```
-
-出现 `add route: ... file exists` → 有别的 VPN 占着路由，转 `docs/troubleshooting.md` 第 1 条处理，**不要重复重启内核硬试**。
+TUN 没接管路由 / 出现 `add route: ... file exists` → 有别的 VPN 占着路由，转 `docs/troubleshooting.md` 第 1 条处理，**不要重复重启内核硬试**。
 
 ## Phase 5：验证
 
@@ -121,6 +126,8 @@ bash scripts/verify.sh --save-baseline
 ```
 
 六项全绿才算部署完成。任何一项红 → 按脚本输出的提示对照 `docs/troubleshooting.md`，修完重跑。**禁止在验证不过的情况下宣布完成。**
+
+第 3、5 项拿**此刻真实在跑的进程、真实的连接**做判断，所以跑之前让 Chrome（开着 claude.ai）、Claude 桌面版、Claude Code 都处于运行状态，结果才有代表性。第 5 项提示「此刻没有 Claude 相关连接可查」时，开着 claude.ai 再跑一次。
 
 `--save-baseline` 会把这次实测到的**真实出口 IP** 记进 `$CFG/claude-lane-state.json`（只在全绿时才写）。以后日常体检直接 `bash scripts/verify.sh`，它就跟这个基线比——能发现"出口悄悄换了"，这是只比配置里的服务器地址做不到的。
 
@@ -152,15 +159,32 @@ bash scripts/rollback.sh <deployment id> # 回滚指定那次部署（推荐：�
 bash scripts/rollback.sh                 # 不给 id 就回滚【最近一次】
 ```
 
-脚本会列出本次要**还原**哪些文件、**删除**哪些本次新建的文件，等你确认；还原前它会把当前状态也存一份（回滚本身可后悔）。还原完按它的提示让用户在 GUI 点一次订阅卡片重新激活，然后确认两件事：内核正常（`curl --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/version` 有返回）、正常上网没坏。
+脚本会列出本次要**还原**哪些文件、**删除**哪些本次新建的文件，等你确认；还原前它会把当前状态也存一份（回滚本身可后悔）。还原完按它的提示让用户在 GUI 点一次订阅卡片重新激活，然后确认两件事：内核正常（`bash scripts/probe.sh --sock` 能输出路径）、正常上网没坏。
 
 ⚠️ 别再用「找最早的 .bak 文件复制回去」那套老做法——部署过几次之后，最早那份可能是几个月前的状态，会恢复过头。
 
 回滚完成后，如实告诉用户卡在哪个阶段、日志里的相关报错行，由用户决定重试还是先排障，**不要回滚完立刻自动重试**。
 
+## 已部署的机器：升级对齐（仓库更新后 / 体检报版本漂移 / 突然出问题）
+
+适用于：`verify.sh` 末尾报「配置漂移」，或者以前好好的突然出问题（比如 claude.ai 跳「App unavailable in region」、会话显示日本）。**不要整份重写增强文件**，用户可能在里面加过自己的规则。
+
+1. `bash scripts/probe.sh` + `bash scripts/verify.sh`，先看哪项红。红项先对照 `docs/troubleshooting.md` 定位原因，别急着改
+2. 定一个 deployment id 并备份 rules 文件（以及要改的其他增强文件）：`CLAUDE_LANE_DEPLOY_ID=$(date +%Y%m%d-%H%M%S) bash scripts/backup.sh "$CFG/profiles/<rules uid>.yaml"`
+3. 对照 `templates/3-rules.yaml`，把本机文件里缺的或过时的规则补进去，用户自己加的规则原样保留。可以先离线核对：`python3 scripts/lanecheck.py rules "$CFG/profiles/<rules uid>.yaml"`
+4. 让用户在 GUI 点订阅卡片激活 → `bash scripts/verify.sh --save-baseline`。全绿时会把本机的模板版本更新成当前仓库版本
+5. 告诉用户 deployment id；如果漏流期间开过 claude.ai，提醒他去撤销归属地不对的会话
+
+## 遇到 docs/compatibility.md 里没记录的版本 / 现象
+
+照 `docs/compatibility.md` 最后一节做。核心是三点：
+- **用实时连接说话，别猜**：`lanecheck.py conns` 加上 `/connections` 原始数据里的 `process` / `processPath` / `rule` / `chains` 字段
+- **规则优先写正则或路径，不写精确名**
+- **修完把新情况记下来**：兼容记录加一行，必要时同步模板、`lanecheck.py` 的已知进程名、`probe.sh` 的已验证版本，把真实样本加进 `selftest.sh`。下一个拿到仓库的 agent 靠这些记录少走弯路
+
 ## 改动了 scripts/ 里的脚本？
 
-先跑烟雾测试再交付：`bash scripts/selftest.sh`（在临时目录造假配置，覆盖全新空文件、特殊字符凭证、重复运行、冲突拒绝、回滚删除新建文件等场景，不碰真实配置）。v1.1.0 有三个 bug 就是因为只在"老配置 + 简单密码"上测过。
+先跑烟雾测试再交付：`bash scripts/selftest.sh`（在临时目录造假配置，覆盖全新空文件、特殊字符凭证、重复运行、冲突拒绝、回滚删除新建文件、规则与进程名匹配、socket 探测、API 不可达等场景，不碰真实配置）。v1.1.0 有三个 bug 就是因为只在"老配置 + 简单密码"上测过。
 
 ## 完成标准
 

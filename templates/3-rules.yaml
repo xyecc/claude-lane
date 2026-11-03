@@ -5,14 +5,19 @@
 #       已被下面的进程级拦截取代，不要自作主张加回去。
 
 prepend:
-  # ── 1. Chrome 的 QUIC 会绕过域名嗅探漏到默认节点（实测漏成日本），拒绝后无感回落 TCP
-  - "AND,((PROCESS-NAME,Google Chrome Helper),(NETWORK,UDP),(DST-PORT,443)),REJECT"
-  - "AND,((PROCESS-NAME,Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT"
-  # ⚠️ 这里只拦了 Google Chrome。其他 Chromium 系浏览器（Edge / Arc / Brave 等）QUIC 同样会漏，
-  #    症状一样（会话显示日本等机场默认位置）。用的话照抄上面两条、换成对应进程名：
-  #      Edge:  "Microsoft Edge" / "Microsoft Edge Helper"
-  #      Arc:   "Arc" / "Arc Helper"
-  #      Brave: "Brave Browser" / "Brave Browser Helper"
+  # ── 1. Chrome 的 QUIC（UDP/443）会绕过域名规则漏出去，拒绝后无感回落 TCP
+  #    漏到哪取决于节点支不支持 UDP：支持 → 漏到机场默认节点（实测显示日本）；
+  #    不支持（静态节点 udp:false、很多机场节点也是）→ mihomo 跳过所有规则直接 DIRECT →
+  #    国内 IP → claude.ai 跳「App unavailable in region」（2026-11-02 实测）。
+  #    ⚠️ 必须用正则匹配进程名，不要写精确名：Chrome 会改 Helper 进程的名字
+  #    （Chrome 156 起网络进程叫「Google Chrome Helper (Aperitif)」，旧的精确名规则静默失效）。
+  #    PROCESS-NAME-REGEX 需要 mihomo ≥ v1.18.5。各版本进程名见 docs/compatibility.md
+  - "AND,((PROCESS-NAME-REGEX,^Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT"
+  # ⚠️ 这里只拦了 Google Chrome（含 Beta / Canary）。其他 Chromium 系浏览器 QUIC 同样会漏，
+  #    用的话照抄上面这条、把正则换成（verify.sh 第 3 项发现它们在跑却没拦会黄色提醒）：
+  #      Edge:  ^Microsoft Edge
+  #      Brave: ^Brave Browser
+  #      Arc:   ^Arc( Helper.*)?$
   #    Safari 的网络请求走系统进程，没有干净的进程级拦法；用 Safari 出现漏流就换浏览器访问 claude.ai。
 
   # ── 2. Claude 桌面版全家的 UDP 同理拒绝，强制走 TCP
@@ -23,6 +28,7 @@ prepend:
   - "AND,((PROCESS-NAME,Claude),(NETWORK,UDP)),REJECT"
   - "AND,((PROCESS-NAME,claude.exe),(NETWORK,UDP)),REJECT"
   - "AND,((PROCESS-NAME,claude),(NETWORK,UDP)),REJECT"
+  - "AND,((PROCESS-PATH-REGEX,/.local/share/claude/versions/),(NETWORK,UDP)),REJECT"
 
   # ── 3. Claude 桌面版按进程名导流（最可靠，不受 DNS/IP 影响；顺带覆盖 claude CLI）
   - "PROCESS-NAME,Claude Helper,Claude"
@@ -34,9 +40,14 @@ prepend:
   #    但 mihomo 匹配的是内核看到的进程名（`ps -axo comm`），实测显示为小写 claude。
   #    只写 claude.exe 的话规则永远不命中 → anthropic 域名靠域名规则还能兜住，
   #    但 Datadog 等遥测域名会漏到默认节点（2026-07 实测漏到日本，见排障手册第 9 条）。
-  #    部署前用 `ps -axo comm | sed 's|.*/||' | grep -i claude | sort -u` 看本机真实进程名，多的一并加上。
+  #    别靠 ps 看进程名（它显示的是启动时的名字），mihomo 看的是解析过符号链接的真实可执行文件，
+  #    verify.sh 第 3 项会用同样的方式核对本机在跑的 Claude 进程是否都被覆盖。
   - "PROCESS-NAME,claude.exe,Claude"
   - "PROCESS-NAME,claude,Claude"
+  # ⚠️ Claude Code 原生安装版（~/.local/bin/claude → ~/.local/share/claude/versions/<版本号>）
+  #    在 mihomo 眼里进程名就是版本号（如 2.1.316），每次升级都变，上面两条按名字的规则抓不到，
+  #    只能按路径匹配（2026-11-02 实测）。PROCESS-PATH-REGEX 需要 mihomo ≥ v1.18.5
+  - "PROCESS-PATH-REGEX,/.local/share/claude/versions/,Claude"
 
   # ── 4. 域名兜底（网页版、Claude Code、其他工具）
   - "DOMAIN-SUFFIX,anthropic.com,Claude"

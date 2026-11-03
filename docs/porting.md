@@ -19,7 +19,7 @@
 - 域名后缀：`anthropic.com`、`claude.com`、`claude.ai`、`claudeusercontent.com`；域名关键词 `anthropic`
 - IP 段兜底：`160.79.104.0/23`（Anthropic 自有段，no-resolve）
 
-**③ QUIC 拦截。** 浏览器进程与 Claude 桌面进程的 UDP/443 必须 REJECT（浏览器会用 QUIC 绕过域名识别漏到默认节点；拒掉后无感回落 TCP）。**注意粒度必须是进程级**——全局禁 UDP/443 会废掉全机 HTTP/3。**客户端若没有进程级规则能力（多数简易 V2ray 客户端、全部 iOS 端），做不到等价效果，②的进程层和本条都会缺失，漏流风险自负。**
+**③ QUIC 拦截。** 浏览器进程与 Claude 桌面进程的 UDP/443 必须 REJECT（浏览器会用 QUIC 绕过域名识别漏到默认节点；拒掉后无感回落 TCP）。**注意粒度必须是进程级**——全局禁 UDP/443 会废掉全机 HTTP/3。**进程名要用前缀/正则匹配，别写死**：浏览器会改 Helper 进程名（Chrome 156 的 `Google Chrome Helper (Aperitif)`），Claude Code 原生安装版的进程名是版本号（只能按路径 `~/.local/share/claude/versions/` 匹配），见 `docs/compatibility.md`。另外注意：节点不支持 UDP 时，漏网的 QUIC 在 mihomo 里会**直接 DIRECT**（国内 IP），比漏到默认节点更糟。**客户端若没有进程级规则能力（多数简易 V2ray 客户端、全部 iOS 端），做不到等价效果，②的进程层和本条都会缺失，漏流风险自负。**
 
 **④ 域名嗅探（sniffer）开启**，对 TLS/HTTP/QUIC 嗅探并对 anthropic/claude 域族强制回填域名——Claude 桌面版自解析 DNS，TUN 只见 IP，不开嗅探则域名规则落空。
 

@@ -6,7 +6,36 @@
 
 ---
 
-## 未发布（不 bump `VERSION`：已部署的机器不需要重新对齐）
+## v1.2.2 — 2026-11-02（重要修复，建议每台机器都重新对齐）
+
+**修复：上游升级让规则和体检一起静默失效。** 2026-11-02 实机排查，起因是 Chrome 网页版 claude.ai 突然跳「App unavailable in region」。同时有三个上游变化，**旧版 `verify.sh` 一个都没发现**：
+
+- **Chrome 156 把联网进程改名为 `Google Chrome Helper (Aperitif)`**。模板③的 QUIC 拦截按精确名 `Google Chrome Helper` 写，对不上，于是 QUIC 漏出去了。静态节点和机场节点都是 `udp: false`，mihomo 遇到不支持 UDP 的节点会跳过规则，全跳过就**不经任何规则直接 DIRECT**。结果是国内 IP 直连 claude.ai，被判为地区不可用。模板③改用 `PROCESS-NAME-REGEX,^Google Chrome`
+- **Claude Code 原生安装版在 mihomo 眼里的进程名是版本号**（如 `2.1.316`，每次升级都变）。`claude` / `claude.exe` 两条进程规则都抓不到，访问非 Anthropic 域名的请求和 UDP 会漏到默认节点。模板③新增按安装路径 `/.local/share/claude/versions/` 匹配的导流和 UDP 拦截两条。旧版 `verify.sh` 用 `ps` 看进程名（显示的是 `claude`），所以一直误判为已覆盖
+- **Clash Verge 2.5.8 挪了 socket 和日志**：socket 挪到 `/var/run/clash-verge-service/users/<uid>/`（生成配置里写的路径还是错的）；内核日志挪进 root 才能读的目录。旧版 `verify.sh` 写死 `/tmp/verge/...`，前三项崩出 Python traceback；第 5 项因为读不到日志、什么都没查，却照样打勾
+
+**`verify.sh` 改为拿真实状态做判断，不再只查规则文本**
+- socket、日志路径由新增的 `scripts/probe.sh` 自动探测，优先读运行中内核的 `-ext-ctl-unix` 启动参数
+- 第 1 项：读不到日志时，改查「发往 Anthropic 的路由是否经过 Clash 的 TUN 网卡」
+- 第 3 项：拿**此刻在跑的**浏览器和 Claude 进程逐个对规则。进程名的取法与 mihomo 一致，用 `proc_pidpath`，不用 `ps`。会检查 QUIC 拦截是否覆盖、是否排在导流规则前面；Edge / Brave / Arc 在跑却没拦截时黄色提醒
+- 第 5 项：新增**实时连接扫描**，不依赖日志。能抓到 `rule` 为空的 DIRECT 连接、没走 Claude 组的 claude 域名连接、漏网的 QUIC。日志读得到时，原来的日志扫描照旧做
+- API 不可达时各项干净报红，不再崩 traceback；`rollback.sh` 的提示文字也改用探测到的 socket
+
+**新增**
+- `scripts/probe.sh`：环境探测（Verge / mihomo / Chrome / Claude Code 的版本与路径），给出兼容性提示，会检查 mihomo 是否 ≥ v1.18.5
+- `scripts/lanecheck.py`：规则覆盖和实时连接漏流的判定逻辑。`verify.sh` 调用它，排障时也能单独用
+- `docs/compatibility.md`：**版本兼容记录**。每条都标了实测日期和证据，未实测的单独标注；最后一节写明遇到新版本怎么排查、怎么补记录
+- `CLAUDE.md`：Phase 0 第一步先跑 `probe.sh` 并处理兼容性提示；新增「已部署的机器：升级对齐」「遇到没记录的版本」两节；所有写死的路径改成探测
+- 排障手册：第 2 条补上「地区不可用」这种症状和 Aperitif 这个原因；新增第 13 条（Verge 2.5.8 路径变化）、第 14 条（Claude Code 版本号进程名）
+
+**测试**
+- `selftest.sh` 新增第 10–13 组：规则判定（样本就是本次两个坑的真实进程名）、实时连接扫描（样本是现场抓到的那条漏流连接）、socket 探测优先级、API 不可达时不崩。用例 42 → **58**。另外反向验证过：v1.2.1 的旧 `verify.sh` 和旧模板③在这些用例上确实会失败
+- 实机验证（2026-11-03，Clash Verge 2.5.8 + mihomo v1.19.32）：GUI 激活后六项全绿；重载之后新建的 Claude Code 连接全部命中 `ProcessPathRegex`，重载之前就建立的连接仍显示按域名命中
+- `verify.sh --save-baseline` 在版本不一致时，不再先报「配置漂移」再写入新版本，改为说明「本次会改记为新版本」
+
+**升级须知**：模板③的新规则需要 mihomo ≥ v1.18.5（`bash scripts/probe.sh` 会检查，Clash Verge 2.x 的近期版本都满足）。已部署的机器按 `CLAUDE.md`「已部署的机器：升级对齐」补规则，然后跑 `verify.sh --save-baseline`。
+
+**此前未发布、随本版一起发布的改动：**
 
 - README 按「先说结论 → 为什么 → 怎么做 → 怎么验 → 红线」重排，249 行压到约 150 行；三段 ASCII 图换成 `docs/assets/` 下三张 SVG（核心链路 / agent 部署流程 / 分层规则匹配）
 - 红线收口为**三条**（不装第二个 VPN / 保持规则模式 / 改完 ⌘Q 重启）+ 两条提醒，与 `CLAUDE.md`、`docs/manual-setup.md` 的「三条红线」措辞对齐
@@ -19,7 +48,6 @@
 - 新增 `scripts/windows/`（体检 / 配置 / 验收 / 诊断四个 PowerShell 脚本）+ 协助者技能 `.claude/skills/remote-setup/`：agent 留在协助者本机、对方 Windows 只开远程终端即可部署，2026-10-05 经网易 UU 远程真机跑通
 - 新增 `docs/helping-others.md`（帮人装机流程与消息模板）、`docs/windows-setup.md`（Windows 纯手工图文骨架）；`docs/iphone-notes.md` 补美区 Apple ID 前置
 - 新增 `scripts/add-static.rb`（同一台 Mac 加第二个静态 IP，作为 Claude 分组里的备选）：改为**插入文本**写入，不再整份 `YAML.dump` 重写——旧写法会抹掉 `# claude-lane managed` 标记，之后 `set-credentials.sh` 只能报冲突；写入前自证「解析结果 = 旧内容 + 新节点」且注释一行不丢。`selftest.sh` 新增第 9 组（3 种文件形态 + 加完后 set-credentials 仍能替换），用例 31 → **42**
-- 模板与 `VERSION` 未改动：已部署的机器**不需要**重新对齐
 
 ## v1.2.1 — 2026-07-26
 

@@ -227,6 +227,108 @@ P9="$CFG9/template/profiles/pX.yaml"
 [ "$RC" = "0" ] && printf '%s' "$OUT" | grep -q 'MODE=replace\|凭证已写入' && ok "加完第二条后 set-credentials 仍能替换托管块" || ng "加完第二条后 set-credentials 失败（退出码 ${RC}）"
 grep -q '198.51.100.99' "$P9" && grep -q 'US-Static-2' "$P9" && ok "第一条凭证已更新，第二条原样保留" || ng "替换后第一条没更新或第二条丢了"
 
+echo "[10] lanecheck.py rules：拿真实进程名对规则（2026-11-02 Chrome Aperitif / Claude Code 版本号进程名两个坑）"
+LC="$HERE/lanecheck.py"; T10="$SANDBOX/t10"; mkdir -p "$T10"
+TAB=$(printf '\t')
+# 本机实测过的进程名全集（名字<TAB>mihomo 看到的真实路径），见 docs/compatibility.md
+cat > "$T10/ps-all.txt" <<EOF
+Google Chrome${TAB}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+Google Chrome Helper${TAB}/Applications/Google Chrome.app/Contents/Frameworks/x/Google Chrome Helper
+Google Chrome Helper (Aperitif)${TAB}/Applications/Google Chrome.app/Contents/Frameworks/x/Google Chrome Helper (Aperitif)
+Google Chrome Helper (Aperitif Renderer)${TAB}/Applications/Google Chrome.app/Contents/Frameworks/x/Google Chrome Helper (Aperitif Renderer)
+Claude${TAB}/Applications/Claude.app/Contents/MacOS/Claude
+Claude Helper${TAB}/Applications/Claude.app/Contents/Frameworks/Claude Helper
+Claude Helper (GPU)${TAB}/Applications/Claude.app/Contents/Frameworks/Claude Helper (GPU)
+Claude Helper (Renderer)${TAB}/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer)
+2.1.316${TAB}/Users/someone/.local/share/claude/versions/2.1.316
+claude${TAB}/opt/homebrew/bin/claude
+EOF
+# 修复前（v1.2.1 模板）的 Chrome 规则 + 本机 API 返回的格式
+cat > "$T10/old-api.json" <<'EOF'
+{"rules":[
+ {"type":"AND","payload":"((ProcessName,Google Chrome Helper) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((ProcessName,Google Chrome) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"DomainSuffix","payload":"claude.com","proxy":"Claude"},
+ {"type":"DomainSuffix","payload":"http-intake.logs.us5.datadoghq.com","proxy":"Claude"},
+ {"type":"Match","payload":"","proxy":"Final"}]}
+EOF
+printf 'Google Chrome Helper (Aperitif)\t/x/Google Chrome Helper (Aperitif)\n' > "$T10/ps-aperitif.txt"
+OUT=$(python3 "$LC" rules "$T10/old-api.json" --ps "$T10/ps-aperitif.txt" 2>&1); RC=$?
+[ "$RC" = "1" ] && printf '%s' "$OUT" | grep -q 'Aperitif' && ok "旧的精确名规则遇到 Aperitif 进程会报红（今天的 bug 能被抓到）" || ng "Aperitif 没被识别为未覆盖（退出码 ${RC}）：${OUT}"
+OUT=$(python3 "$LC" rules "$HERE/../templates/3-rules.yaml" --ps "$T10/ps-all.txt" 2>&1); RC=$?
+[ "$RC" = "0" ] && ! printf '%s' "$OUT" | grep -q '^NG' && ok "模板③覆盖所有已知进程名（Chrome 各 Helper / Claude 桌面版 / Claude Code 版本号进程）" || ng "模板③有进程没覆盖：${OUT}"
+# 进程名自带括号的 API 写法要能正确拆开
+cat > "$T10/paren.json" <<'EOF'
+{"rules":[
+ {"type":"AND","payload":"((ProcessNameRegex,^Google Chrome) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((ProcessName,Claude Helper (GPU)) && (Network,udp))","proxy":"REJECT"},
+ {"type":"ProcessName","payload":"Claude Helper (GPU)","proxy":"Claude"},
+ {"type":"DomainSuffix","payload":"claude.com","proxy":"Claude"},
+ {"type":"DomainSuffix","payload":"http-intake.logs.us5.datadoghq.com","proxy":"Claude"}]}
+EOF
+printf 'Claude Helper (GPU)\t/x/Claude Helper (GPU)\n' > "$T10/ps-gpu.txt"
+OUT=$(python3 "$LC" rules "$T10/paren.json" --ps "$T10/ps-gpu.txt" 2>&1); RC=$?
+[ "$RC" = "0" ] && ok "进程名带括号（Claude Helper (GPU)）的 AND 规则解析正确" || ng "带括号的进程名解析错了：${OUT}"
+# 版本号进程名只靠名字规则 → 必须报红
+OUT=$(python3 "$LC" rules "$T10/paren.json" --ps <(printf '2.1.316\t/Users/u/.local/share/claude/versions/2.1.316\n') 2>&1); RC=$?
+[ "$RC" = "1" ] && printf '%s' "$OUT" | grep -q '2.1.316' && ok "Claude Code 版本号进程名没有路径规则时会报红" || ng "版本号进程名没被发现：${OUT}"
+# 顺序：QUIC 拦截排在 Claude 导流规则后面要报红；全局 UDP/443 拦截要报红
+cat > "$T10/order.json" <<'EOF'
+{"rules":[
+ {"type":"DomainSuffix","payload":"claude.ai","proxy":"Claude"},
+ {"type":"AND","payload":"((ProcessNameRegex,^Google Chrome) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"DomainSuffix","payload":"claude.com","proxy":"Claude"},
+ {"type":"DomainSuffix","payload":"http-intake.logs.us5.datadoghq.com","proxy":"Claude"}]}
+EOF
+OUT=$(python3 "$LC" rules "$T10/order.json" --ps "$T10/ps-aperitif.txt" 2>&1)
+printf '%s' "$OUT" | grep -q '排在' && ok "QUIC 拦截排在 Claude 规则后面会报红" || ng "没发现顺序错误：${OUT}"
+printf '%s' "$OUT" | grep -q '^NG 存在全局' && ok "全局 UDP/443 拦截会报红" || ng "没发现全局 UDP/443 拦截：${OUT}"
+
+echo "[11] lanecheck.py conns：实时连接漏流（样本是 2026-11-02 现场抓到的那条）"
+cat > "$T10/leak.json" <<'EOF'
+{"connections":[
+ {"metadata":{"network":"udp","host":"claude.ai","destinationPort":"443","process":"Google Chrome Helper (Aperitif)","processPath":"/x"},"rule":"","rulePayload":"","chains":["DIRECT"]},
+ {"metadata":{"network":"tcp","host":"api.anthropic.com","destinationPort":"443","process":"2.1.316","processPath":"/Users/u/.local/share/claude/versions/2.1.316"},"rule":"DomainSuffix","chains":["🇺🇸 US-Static-2","Claude"]}]}
+EOF
+OUT=$(python3 "$LC" conns "$T10/leak.json" 2>&1); RC=$?
+[ "$RC" = "1" ] && printf '%s' "$OUT" | grep -q 'Chrome 的 QUIC 没被拦截' && ok "Chrome QUIC 直连（规则为空、走 DIRECT）被识别为漏流" || ng "没识别出 QUIC 漏流：${OUT}"
+cat > "$T10/clean.json" <<'EOF'
+{"connections":[
+ {"metadata":{"network":"tcp","host":"claude.ai","destinationPort":"443","process":"Google Chrome Helper (Aperitif)"},"rule":"DomainSuffix","chains":["🇺🇸 US-Static-2","Claude"]},
+ {"metadata":{"network":"tcp","host":"www.google.com","destinationPort":"443","process":"Google Chrome Helper (Aperitif)"},"rule":"DomainSuffix","chains":["SG","Proxies","Google"]}]}
+EOF
+OUT=$(python3 "$LC" conns "$T10/clean.json" 2>&1); RC=$?
+[ "$RC" = "0" ] && printf '%s' "$OUT" | grep -q '检查了 1 条' && ok "正常连接不误报，且只统计 Claude 相关连接" || ng "正常连接被误报：${OUT}"
+cat > "$T10/final.json" <<'EOF'
+{"connections":[{"metadata":{"network":"tcp","sniffHost":"a.claude.ai","destinationPort":"443","process":""},"rule":"Match","chains":["JP","Final"]}]}
+EOF
+OUT=$(python3 "$LC" conns "$T10/final.json" 2>&1); RC=$?
+[ "$RC" = "1" ] && ok "claude 域名走了 Final 兜底会报红（进程识别不出来时也能抓）" || ng "没发现走 Final 的 claude 连接：${OUT}"
+
+echo "[12] probe.sh：socket 自动探测（Verge 2.5.8 起配置里写的路径是错的，必须以内核启动参数为准）"
+CFG12="$SANDBOX/cfg12"; mkdir -p "$CFG12"
+printf 'external-controller-unix: /var/folders/zz/T/verge-mihomo.sock\n' > "$CFG12/clash-verge.yaml"
+PSARGS='/Library/Application Support/clash-verge-service/cores/verge-mihomo -d /x -f /x/config.yaml -ext-ctl-unix /var/run/clash-verge-service/users/501/verge-mihomo.sock'
+C=$(CLAUDE_LANE_CFG="$CFG12" CLAUDE_LANE_PS_ARGS="$PSARGS" bash "$HERE/probe.sh" --candidates | tr '\n' '|')
+[ "$C" = "/var/run/clash-verge-service/users/501/verge-mihomo.sock|/var/folders/zz/T/verge-mihomo.sock|/tmp/verge/verge-mihomo.sock|" ] \
+  && ok "候选顺序：内核启动参数 > 生成配置 > 老位置 /tmp/verge" || ng "候选顺序不对：${C}"
+C=$(CLAUDE_LANE_CFG="$SANDBOX/none" CLAUDE_LANE_PS_ARGS="" bash "$HERE/probe.sh" --candidates | tr '\n' '|')
+[ "$C" = "/tmp/verge/verge-mihomo.sock|" ] && ok "没有内核进程、没有配置时只剩老位置" || ng "空环境候选不对：${C}"
+C=$(CLAUDE_LANE_SOCK="$SANDBOX/x.sock" CLAUDE_LANE_PS_ARGS="$PSARGS" bash "$HERE/probe.sh" --candidates | tr '\n' '|')
+[ "$C" = "$SANDBOX/x.sock|" ] && ok "设了 CLAUDE_LANE_SOCK 就只认它" || ng "CLAUDE_LANE_SOCK 没生效：${C}"
+CLAUDE_LANE_SOCK="$SANDBOX/x.sock" bash "$HERE/probe.sh" --sock >/dev/null 2>&1
+[ "$?" = "1" ] && ok "socket 不存在时 --sock 退出码 1" || ng "socket 不存在时 --sock 没返回 1"
+
+echo "[13] verify.sh：API 不可达时干净地报红，不能崩出 Python traceback（v1.2.1 在 Verge 2.5.8 上就是这么崩的）"
+CFG13="$SANDBOX/cfg13"; mkdir -p "$CFG13"
+printf 'mixed-port: 1\n' > "$CFG13/clash-verge.yaml"   # 端口 1：出口双验立刻失败，不发真实网络请求
+with_timeout 60 env CLAUDE_LANE_CFG="$CFG13" CLAUDE_LANE_SOCK="$SANDBOX/nope.sock" bash "$HERE/verify.sh" >"$SANDBOX/v13.log" 2>&1
+RC=$?
+[ "$RC" != "124" ] && ok "没卡死" || ng "verify.sh 超时卡死"
+! grep -q 'Traceback' "$SANDBOX/v13.log" && ok "没有 Python traceback" || ng "崩出了 traceback：$(grep -m1 -A3 Traceback "$SANDBOX/v13.log")"
+[ "$RC" != "0" ] && grep -q 'API 不可达' "$SANDBOX/v13.log" && ok "明确报出 API 不可达且整体判失败" || ng "没有正确报错（退出码 ${RC}）"
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   printf '\033[32m== 全部 %s 项通过 ==\033[0m\n' "$PASS"

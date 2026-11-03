@@ -1,6 +1,8 @@
-# 排障手册（12 个真实踩过的坑）
+# 排障手册（14 个真实踩过的坑）
 
-按症状查。每条格式：症状 → 原因 → 处理。前 3 条及第 9、10 条是 2026-07 真机实战新增，第 11、12 条来自 2026-08 在一台干净 Mac 上的远程部署，其余继承自本仓库第一版。
+按症状查。每条格式：症状 → 原因 → 处理。前 3 条及第 9、10 条是 2026-07 真机实战新增，第 11、12 条来自 2026-08 在一台干净 Mac 上的远程部署，第 2 条的补充和第 13、14 条来自 2026-11-02（上游版本升级导致规则和检查静默失效），其余继承自本仓库第一版。
+
+> 下面的命令里凡是用到 `$SOCK` 的，先跑 `SOCK=$(bash scripts/probe.sh --sock)`——socket 位置随 Clash Verge 版本变，见 `docs/compatibility.md`。
 
 ---
 
@@ -21,24 +23,43 @@ lsof -n | grep utun_control
 scutil --nc list
 scutil --nc stop <冲突VPN的UUID>
 # ④ 释放后让 Clash 重建 TUN
-curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/configs -d '{"tun":{"enable":false}}'
+SOCK=$(bash scripts/probe.sh --sock)
+curl -X PATCH --unix-socket "$SOCK" http://localhost/configs -d '{"tun":{"enable":false}}'
 sleep 2
-curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/configs -d '{"tun":{"enable":true}}'
+curl -X PATCH --unix-socket "$SOCK" http://localhost/configs -d '{"tun":{"enable":true}}'
 ```
 
 **根治**：卸载 Mac 上多余的代理 App。一台 Mac 只留一个接管路由的代理软件。
 
-## 2. Chrome 网页版 claude.ai 显示日本/其他国家会话（QUIC 漏流）
+## 2. Chrome 网页版 claude.ai 显示日本会话，或直接跳「App unavailable in region」（QUIC 漏流）
 
-**症状**：桌面版/Claude Code 归属地正确，唯独 Chrome 里的会话显示日本东京等机场默认节点位置。
+**症状**：桌面版和 Claude Code 的归属地都正确，只有 Chrome 出问题。有两种表现：
+- 会话显示日本东京等机场默认节点的位置；
+- **直接跳到 `claude.com/app-unavailable-in-region`**（2026-11-02 实测）。
 
-**原因**：Chrome 用 QUIC（HTTP/3，UDP/443）直连，mihomo 对 QUIC 的域名嗅探不可靠，流量落到 MATCH 兜底走了默认节点。TCP 的 TLS 嗅探则 100% 可靠。
+**原因**：Chrome 用 QUIC（HTTP/3，跑在 UDP/443 上）连 claude.ai。QUIC 没被拦下时，它会绕过本该生效的规则。漏到哪取决于节点支不支持 UDP：
+- 节点支持 UDP → 落到 MATCH 兜底，走机场默认节点 → 显示日本；
+- 节点**不支持** UDP（模板①的静态节点是 `udp: false`，很多机场节点也是）→ mihomo 会跳过所有指向这些节点的规则，最后**不经任何规则直接 DIRECT** → 国内 IP → 地区不可用。这时 `/connections` 里那条连接的 `rule` 字段是**空的**。
 
-**处理**：确认规则最前面有模板③的两条 Chrome QUIC 拦截（`verify.sh` 第 3 项会查）；然后 **⌘Q 完全退出 Chrome 重开**（QUIC 会话有缓存，不重启不生效）；最后到 claude.ai 设置里撤销旧会话重新登录。
+模板③本来就拦了 Chrome 的 QUIC，**为什么还会漏**：v1.2.1 及以前的拦截规则写的是精确进程名 `Google Chrome Helper`。Chrome 156 把联网进程换成了 `Google Chrome Helper (Aperitif)`，精确名对不上，规则静默失效。旧版 `verify.sh` 第 3 项只查规则文本里有没有「Google Chrome」几个字，所以照样打勾。
 
-**不要**用全局 `AND,((NETWORK,UDP),(DST-PORT,443)),REJECT` 来防漏——它会禁掉全机所有应用的 HTTP/3，iCloud/Apple 服务全遭殃。进程级拦截才是对的粒度。
+**确认是不是这个问题**（开着 claude.ai 页面跑）：
 
-**用的不是 Chrome？** 模板③只拦了 Google Chrome 的 QUIC。Edge / Arc / Brave 等其他 Chromium 系浏览器症状完全相同，把模板③最前面两条规则照抄、进程名换成对应浏览器的即可（模板③注释里有进程名对照表）。`verify.sh` 第 3 项只检查 Chrome 那两条，其他浏览器的规则要自己确认。
+```bash
+SOCK=$(bash scripts/probe.sh --sock)
+curl -s --unix-socket "$SOCK" http://localhost/connections | python3 scripts/lanecheck.py conns -
+# 出现「Chrome 的 QUIC 没被拦截：udp claude.ai:443 ← Google Chrome Helper (Aperitif)，规则=（空…），走了 DIRECT」就是它
+```
+
+**处理**：
+1. 规则最前面换成模板③的正则那条：`AND,((PROCESS-NAME-REGEX,^Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT`。需要 mihomo ≥ v1.18.5（`bash scripts/probe.sh` 会查）。
+2. GUI 点一下订阅卡片重新激活。激活时内核会断掉已有连接，一般不重启 Chrome 也能生效；稳妥起见还是 ⌘Q 重开一次。
+3. 跑 `verify.sh`，第 3、5 项要全绿。
+4. 到 claude.ai 设置里**撤销**漏流期间产生的、归属地不对的会话，然后重新登录。
+
+**不要**用全局 `AND,((NETWORK,UDP),(DST-PORT,443)),REJECT` 来防漏。它会禁掉全机所有应用的 HTTP/3，iCloud/Apple 服务全遭殃。进程级拦截才是对的粒度。
+
+**用的不是 Chrome？** Edge / Arc / Brave 等 Chromium 系浏览器症状完全相同。把模板③最前面那条照抄，正则换成对应浏览器的（模板③注释里有对照表）。这些浏览器在跑却没有拦截规则时，`verify.sh` 第 3 项会黄色提醒。
 
 ## 3. 直连测试 静态 IP 失败：`Can't complete SOCKS5 connection`
 
@@ -101,10 +122,11 @@ curl -X PATCH --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/config
 **自查与验证**：
 
 ```bash
-# 本机 Claude 相关进程的真实名字（规则里逐个覆盖）
-ps -axo comm | sed 's|.*/||' | grep -i claude | sort -u
-# 遥测到底走了哪个组：应为 using Claude[...]，不是 using Final[...]
-grep -iE 'datadoghq|statsig' "$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/logs/service/service_latest.log" | tail -3
+# 本机在跑的 Claude 进程有没有都被规则覆盖（取进程名的方式与 mihomo 一致，别用 ps 看——见第 14 条）
+SOCK=$(bash scripts/probe.sh --sock)
+curl -s --unix-socket "$SOCK" http://localhost/rules | python3 scripts/lanecheck.py rules -
+# 遥测此刻走了哪个组：应为 Claude，不是 Final
+curl -s --unix-socket "$SOCK" http://localhost/connections | python3 scripts/lanecheck.py conns -
 ```
 
 `verify.sh` 已相应加强：第 3 项改为核对**当前真实在跑**的 Claude 进程是否都有规则（不再只看规则存不存在），第 5 项漏流扫描纳入 `datadoghq` / `statsig` 域名。
@@ -163,15 +185,47 @@ curl --http1.1 -C - --progress-bar -fL <url> -o <file>
 
 > 文件已完整时再跑带 `-C -` 的命令会报 `curl: (22) … error: 416`——那是「没得续了」，**无害**，说明文件是好的。
 
+## 13. Clash Verge 升到 2.5.8 后，`verify.sh` 崩出 Python traceback、「mihomo API 不可达」（2026-11-02 真实案例）
+
+**症状**：Clash 明明在正常工作，`verify.sh` 却报 `mihomo API 不可达`，第 2、3 项崩出 `json.decoder.JSONDecodeError`；顶部还有黄字「读不到内核日志」。
+
+**原因**：Verge 2.5.8 的服务模式把两样东西挪了位置：
+- 控制 socket 从 `/tmp/verge/verge-mihomo.sock` 挪到了 `/var/run/clash-verge-service/users/<uid>/verge-mihomo.sock`。而且生成配置里写的 `external-controller-unix` 指向一个不存在的文件，照配置找也找不到。
+- 内核日志写进了只有 root 能读的 `/Library/Application Support/clash-verge-service/`。
+
+v1.2.1 的 `verify.sh` 写死了老路径，于是前三项崩溃。第 5 项「无漏流」因为读不到日志、什么都没检查，**却照样打勾**。作者自己的机器就是这么带着 Chrome QUIC 漏流（第 2 条）跑了好几天没被发现。
+
+**处理**：更新到 v1.2.2 及以上。路径改由 `scripts/probe.sh` 自动探测（优先读运行中内核的 `-ext-ctl-unix` 启动参数）；读不到日志时，第 1 项改为检查路由是否经过 Clash 的 TUN 网卡，第 5 项改为扫描实时连接。以后再遇到没记录过的 Verge 版本，按 `docs/compatibility.md` 最后一节处理。
+
+## 14. Claude Code 的进程规则不命中：mihomo 看到的进程名是版本号（2026-11-02 真实案例）
+
+**症状**：`verify.sh` 第 3 项报「这些在跑的 Claude 进程没有进程规则: ['2.1.316']」；或者 `/connections` 里 Claude Code 的连接 `process` 字段是一串版本号，命中的是域名规则而不是进程规则。
+
+**原因**：Claude Code 原生安装版的可执行文件在 `~/.local/share/claude/versions/<版本号>`，`~/.local/bin/claude` 只是指向它的符号链接。mihomo 取进程名用的是**解析过符号链接的真实文件名**，也就是 `2.1.316` 这样的版本号，而且每次升级都会变。`ps` 显示的是启动时的名字 `claude`，所以拿 `ps` 去核对会误以为规则是对的（旧版 `verify.sh` 就是这么判断的）。
+
+后果：访问 Anthropic 域名的请求还有域名规则兜着；其他请求（以及 UDP）不经过 Claude 组，会漏到机场默认节点。
+
+**处理**：用模板③里按路径匹配的两条，需要 mihomo ≥ v1.18.5：
+
+```yaml
+- "AND,((PROCESS-PATH-REGEX,/.local/share/claude/versions/),(NETWORK,UDP)),REJECT"   # 放在 UDP 拦截组
+- "PROCESS-PATH-REGEX,/.local/share/claude/versions/,Claude"                          # 放在进程导流组
+```
+
+激活后跑 `verify.sh`，第 3 项应该列出 `2.1.316` 这类版本号进程且全绿。
+
 ---
 
 ## 快速自检命令备忘
 
 ```bash
+# 环境探测（版本、socket、兼容性提示）
+bash scripts/probe.sh
 # 六项全套
 bash scripts/verify.sh
-# 看某条流量实际命中了哪条规则（跑一次 Claude 后看日志尾部）
-tail -50 "$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/logs/service/service_latest.log" | grep -iE "claude|anthropic"
+SOCK=$(bash scripts/probe.sh --sock)
+# 此刻的连接有没有漏（开着 claude.ai / Claude 桌面版跑）；每条连接实际命中的规则在 rule 字段
+curl -s --unix-socket "$SOCK" http://localhost/connections | python3 scripts/lanecheck.py conns -
 # 策略组当前指向
-curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies | python3 -m json.tool | grep -A2 '"Claude"'
+curl -sS --unix-socket "$SOCK" http://localhost/proxies | python3 -m json.tool | grep -A2 '"Claude"'
 ```

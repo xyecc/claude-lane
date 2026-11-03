@@ -24,7 +24,8 @@ pgrep -fl verge-mihomo
 grep -A2 '^tun:' "$CFG/clash-verge.yaml" | head -3; grep '^mode:' "$CFG/clash-verge.yaml"
 
 # ③ 订阅里有美国节点（在输出里找 美国/US/🇺🇸/Los Angeles 等；注意 US 会误匹配 AUS/RUS）
-curl -sS --unix-socket /tmp/verge/verge-mihomo.sock http://localhost/proxies | python3 -m json.tool | grep '"name"' | sort -u
+SOCK=$(bash scripts/probe.sh --sock)   # socket 位置随 Verge 版本变，找不到先跑 bash scripts/probe.sh 看原因
+curl -sS --unix-socket "$SOCK" http://localhost/proxies | python3 -m json.tool | grep '"name"' | sort -u
 
 # ④ 没有别的 VPN 在跑（除 Tailscale 外不该有 Connected；有就先断开，见排障手册第 1 条）
 scutil --nc list
@@ -65,20 +66,20 @@ bash scripts/backup.sh "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<grou
 |---|---|---|
 | `1-proxies.yaml` | proxies 的 uid 文件 | **别手填**：跑 `bash scripts/set-credentials.sh`（密码隐藏输入、自动定位文件、自动备份）。执意手填的话 **`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
 | `2-groups.yaml` | groups 的 uid 文件 | `US-Chain` 里填第 0 步记下的美国节点名，**逐字一致** |
-| `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前） |
+| `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前）；正则 / 路径规则别改回精确进程名（见 `docs/compatibility.md`） |
 | `4-merge.yaml` | merge 的 uid 文件 | sniffer 段照抄（文件里已有别的顶层配置就保留、追加） |
 
 ## 第 4 步：激活
 
 打开 Clash Verge → 左侧「订阅」→ **点一下当前订阅卡片**（触发重新合并 + 内核加载）。
 
-激活后立刻查一眼日志：
+激活后立刻确认 TUN 接管了路由（不依赖日志，任何 Verge 版本都适用）：
 
 ```bash
-tail -20 "$CFG/logs/service/service_latest.log" | grep -i "Start TUN listening error"
+route -n get 160.79.104.10 | grep interface   # 应是 Clash 的 utun 网卡（如 utun1024）
 ```
 
-有输出（`add route: ... file exists`）= 有别的 VPN 抢路由，转排障手册第 1 条，**不要反复重启内核硬试**。
+接口不对，或者日志里有 `Start TUN listening error: add route: ... file exists`（日志位置跑 `bash scripts/probe.sh` 查，Verge 2.5.8 起读不到是正常的）= 有别的 VPN 抢路由，转排障手册第 1 条，**不要反复重启内核硬试**。
 
 ## 第 5 步：验证
 

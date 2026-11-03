@@ -97,18 +97,18 @@ bash scripts/verify.sh
 
 ```
 == Claude 专线验证 ==
-[1/6] 内核与 TUN          ✅ mihomo API 可达  ✅ TUN 无启动错误
+[1/6] 内核与 TUN          ✅ mihomo API 可达  ✅ TUN 已接管路由
 [2/6] 策略组状态          ✅ Claude 组 → 🇺🇸 US-Static  ✅ US-Chain 组 → 🇺🇸 美国节点 03
-[3/6] 规则完整性          ✅ QUIC 拦截在最前  ✅ 在跑的 Claude 进程都有规则  ✅ 遥测域名规则存在
+[3/6] 规则完整性          ✅ Chrome QUIC 拦截覆盖在跑的进程  ✅ 在跑的 Claude 进程都有规则  ✅ 遥测域名规则存在
 [4/6] 出口双验（关键）
   ✅ claude.ai 出口 = 198.51.100.10 (US) <- 与基线一致
   ✅ 普通流量出口 = 203.0.113.55 <- 机场节点, 未误走静态
-[5/6] 日志漏流扫描        ✅ 无 Claude/Anthropic 流量走到非 Claude 组
+[5/6] 漏流扫描            ✅ 实时连接里没有漏流（检查了 16 条 Claude 相关连接）
 [6/6] 其他 VPN 检测       ✅ 无其他 VPN 在运行
 == 六项全部通过，部署成功 ==
 ```
 
-六项全绿 = 专线没问题，别处找原因（最常见是 claude.ai 里旧地区的会话没撤销，见 FAQ）；有红项 = 按提示对照 `docs/troubleshooting.md`（12 个真实踩过的坑）处理。还不行就把 `verify.sh` 的输出贴出来提 issue——**贴之前记得把静态 IP、节点名、订阅名涂掉**。
+六项全绿 = 专线没问题，别处找原因（最常见是 claude.ai 里旧地区的会话没撤销，见 FAQ）；有红项 = 按提示对照 `docs/troubleshooting.md`（14 个真实踩过的坑）处理。还不行就把 `verify.sh` 的输出贴出来提 issue——**贴之前记得把静态 IP、节点名、订阅名涂掉**。
 
 ## 红线（配完必读）
 
@@ -135,11 +135,14 @@ bash scripts/verify.sh
 | `CLAUDE.md` | agent 执行手册（含安装迁移的全阶段流程，Claude Code 进入本目录自动加载） |
 | `templates/` | 4 个 Clash 增强文件模板（填空即用）+ `optional-payment-rules.yaml`（可选：订阅付款走静态 IP，默认不启用） |
 | `scripts/verify.sh` | 一键六项验证（`--save-baseline` 记录出口基线） |
+| `scripts/probe.sh` | 环境探测：各组件版本、mihomo socket 位置、兼容性提示（agent 第一步就跑它） |
+| `scripts/lanecheck.py` | 规则覆盖 / 实时连接漏流判定（verify.sh 调用，也可单独用来排查） |
 | `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
 | `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚某次部署（新建的文件会被删除） |
-| `scripts/selftest.sh` | 烟雾测试 31 项（沙箱跑，改脚本后先跑它） |
+| `scripts/selftest.sh` | 烟雾测试 58 项（沙箱跑，改脚本后先跑它） |
 | `docs/manual-setup.md` | 人肉版部署手册（不用 agent 的等价流程） |
-| `docs/troubleshooting.md` | 排障手册（12 个真实踩过的坑） |
+| `docs/troubleshooting.md` | 排障手册（14 个真实踩过的坑） |
+| `docs/compatibility.md` | 版本兼容记录：Clash Verge / mihomo / Chrome / Claude 各版本的路径与进程名差异（升级后出怪事先看它） |
 | `docs/faq.md` | 常见问题 + 购买 / 下载渠道 |
 | `docs/account-safety.md` | 账号安全清单（遥测环境变量的真相 + 网页版侧习惯 + 系统地区） |
 | `docs/windows-setup.md` | Windows 图文部署手册（GUI 粘模板，不用脚本；截图待补） |
