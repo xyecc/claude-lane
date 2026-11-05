@@ -137,8 +137,14 @@ if ! curl -sS --max-time 8 --proxy "$PROXY" -o /dev/null https://api.ipify.org 2
   bad "本地代理端口不通（${PROXY}），跳过出口双验"
   note "确认 Verge 设置→端口 里开启的端口类型和号码；本脚本按 mixed-port > port > socks-port 顺序自动发现"
 else
-  TRACE=$(curl -sS --max-time 25 --proxy "$PROXY" https://claude.ai/cdn-cgi/trace 2>/dev/null)
-  TRACE_IP=$(printf '%s' "$TRACE" | grep '^ip=' | cut -d= -f2 | tr -d '\r ')
+  # 最多试 3 次：静态 IP 线路会偶发断连（2026-11-05 实测约 1/8 的请求在 TLS 握手时被断），一次失败不该直接报红
+  TRACE_IP=""; TRACE_TRIES=0
+  while [ -z "$TRACE_IP" ] && [ "$TRACE_TRIES" -lt 3 ]; do
+    [ "$TRACE_TRIES" -gt 0 ] && sleep 2
+    TRACE_TRIES=$((TRACE_TRIES+1))
+    TRACE=$(curl -sS --max-time 15 --proxy "$PROXY" https://claude.ai/cdn-cgi/trace 2>/dev/null)
+    TRACE_IP=$(printf '%s' "$TRACE" | grep '^ip=' | cut -d= -f2 | tr -d '\r ')
+  done
   TRACE_LOC=$(printf '%s' "$TRACE" | grep '^loc=' | cut -d= -f2 | tr -d '\r ')
   NORM_IP=$(curl -sS --max-time 15 --proxy "$PROXY" https://api.ipify.org 2>/dev/null | tr -d '\r ')
   BASE_IP=$(python3 -c "
@@ -154,11 +160,11 @@ except Exception: print('')" 2>/dev/null)
     if [ -n "$TRACE_IP" ] && [ "$TRACE_IP" = "$BASE_IP" ]; then
       ok "claude.ai 出口 = ${TRACE_IP} (${TRACE_LOC:-?}) <- 与基线一致"
     else
-      bad "claude.ai 出口变了：现在 ${TRACE_IP:-请求失败} (${TRACE_LOC:-?})，基线是 ${BASE_IP}"
+      bad "claude.ai 出口变了：现在 ${TRACE_IP:-请求失败（试了 ${TRACE_TRIES} 次）} (${TRACE_LOC:-?})，基线是 ${BASE_IP}"
       note "静态 IP 换了/到期了？确认无误后用 bash scripts/verify.sh --save-baseline 更新基线"
     fi
   elif [ -z "$TRACE_IP" ]; then
-    bad "拿不到 claude.ai 的出口 IP（链路不通？先看第 1、2 项）"
+    bad "拿不到 claude.ai 的出口 IP（试了 ${TRACE_TRIES} 次；链路不通？先看第 1、2 项）"
   elif [ -n "$NORM_IP" ] && [ "$TRACE_IP" = "$NORM_IP" ]; then
     bad "Claude 出口和普通流量出口相同（${TRACE_IP}）—— 说明 Claude 流量没走专线"
   else
@@ -169,6 +175,9 @@ except Exception: print('')" 2>/dev/null)
     note "尚未记录出口基线，跑一次记下来：bash scripts/verify.sh --save-baseline"
   fi
 
+  if [ -n "$TRACE_IP" ] && [ "$TRACE_TRIES" -gt 1 ]; then
+    note "claude.ai 第 ${TRACE_TRIES} 次请求才成功：静态 IP 线路有偶发断连。偶尔一次不用管；经常出现就换 US-Chain 的前置节点，或联系静态 IP 服务商"
+  fi
   if [ -n "$TRACE_LOC" ] && [ "$TRACE_LOC" != "US" ]; then
     bad "出口国家是 ${TRACE_LOC}，不是 US（静态 IP 被回收换区了？）"
   fi

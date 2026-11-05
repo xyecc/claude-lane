@@ -139,7 +139,7 @@ bash scripts/verify.sh
 | `scripts/lanecheck.py` | 规则覆盖 / 实时连接漏流判定（verify.sh 调用，也可单独用来排查） |
 | `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
 | `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚某次部署（新建的文件会被删除） |
-| `scripts/selftest.sh` | 烟雾测试 58 项（沙箱跑，改脚本后先跑它） |
+| `scripts/selftest.sh` | 烟雾测试 60 项（沙箱跑，改脚本后先跑它） |
 | `docs/manual-setup.md` | 人肉版部署手册（不用 agent 的等价流程） |
 | `docs/troubleshooting.md` | 排障手册（14 个真实踩过的坑） |
 | `docs/compatibility.md` | 版本兼容记录：Clash Verge / mihomo / Chrome / Claude 各版本的路径与进程名差异（升级后出怪事先看它） |

@@ -329,6 +329,36 @@ RC=$?
 ! grep -q 'Traceback' "$SANDBOX/v13.log" && ok "没有 Python traceback" || ng "崩出了 traceback：$(grep -m1 -A3 Traceback "$SANDBOX/v13.log")"
 [ "$RC" != "0" ] && grep -q 'API 不可达' "$SANDBOX/v13.log" && ok "明确报出 API 不可达且整体判失败" || ng "没有正确报错（退出码 ${RC}）"
 
+echo "[14] verify.sh 第 4 项：claude.ai 偶发失败会重试，连续 3 次失败才报红（2026-11-05 静态 IP 线路偶发断连误报）"
+CFG14="$SANDBOX/cfg14"; BIN14="$SANDBOX/bin14"; mkdir -p "$CFG14" "$BIN14"
+printf 'mixed-port: 7897\n' > "$CFG14/clash-verge.yaml"
+printf '{"claude_exit_ip": "203.0.113.50"}\n' > "$CFG14/claude-lane-state.json"
+cat > "$BIN14/curl" <<'FAKE'
+#!/usr/bin/env bash
+# 假 curl：claude.ai 前 $FAKE_FAILS 次失败，之后返回固定出口；ipify 返回普通出口；其余（unix socket 等）一律失败
+cnt="$FAKE_DIR/claude.count"
+case "$*" in
+  *claude.ai/cdn-cgi/trace*)
+    n=$(( $(cat "$cnt" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$cnt"
+    [ "$n" -le "$FAKE_FAILS" ] && exit 35
+    printf 'ip=203.0.113.50\nloc=US\n' ;;
+  *api.ipify.org*) printf '198.51.100.20' ;;
+  *) exit 7 ;;
+esac
+FAKE
+chmod +x "$BIN14/curl"
+run14() {  # $1 = 前几次失败
+  rm -f "$SANDBOX/claude.count"
+  with_timeout 90 env PATH="$BIN14:$PATH" FAKE_DIR="$SANDBOX" FAKE_FAILS="$1" \
+    CLAUDE_LANE_CFG="$CFG14" CLAUDE_LANE_SOCK="$SANDBOX/nope.sock" bash "$HERE/verify.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
+}
+OUT=$(run14 1); N=$(cat "$SANDBOX/claude.count" 2>/dev/null)
+echo "$OUT" | grep -q '与基线一致' && echo "$OUT" | grep -q '第 2 次请求才成功' && [ "$N" = 2 ] \
+  && ok "失败 1 次 → 第 2 次成功，判通过并提示线路不稳" || ng "偶发失败没有被重试兜住（请求了 ${N:-0} 次）：$(echo "$OUT" | grep -A1 '\[4/6\]' | tail -1)"
+OUT=$(run14 9); N=$(cat "$SANDBOX/claude.count" 2>/dev/null)
+echo "$OUT" | grep -q '请求失败（试了 3 次）' && [ "$N" = 3 ] \
+  && ok "一直失败 → 试满 3 次后报红" || ng "一直失败时没有试满 3 次再报红（请求了 ${N:-0} 次）"
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   printf '\033[32m== 全部 %s 项通过 ==\033[0m\n' "$PASS"

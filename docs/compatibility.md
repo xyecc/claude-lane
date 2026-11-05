@@ -15,6 +15,7 @@
 | 2.x 早期（2026-07） | `/tmp/verge/verge-mihomo.sock` | `$CFG/logs/service/service_latest.log` | 2026-07 首版部署实测 |
 | 2.5.1（2026-08 ~ 10） | `/tmp/verge/verge-mihomo.sock` | `$CFG/service-logs/service/service_latest.log` | 2026-09-24 `verify.sh` 全绿并记基线；日志路径来自 2026-10-05 的修复提交 |
 | **2.5.8**（2026-10 起） | **`/var/run/clash-verge-service/users/<uid>/verge-mihomo.sock`**（服务模式，由内核启动参数 `-ext-ctl-unix` 指定） | **读不到**：写在 `/Library/Application Support/clash-verge-service/users/<uid>/`，只有 root 能读；`$CFG/service-logs/service/` 是空的 | 2026-11-02 实测 |
+| **2.5.9 / 2.5.10**（2026-11 起，捆绑 mihomo v1.19.33） | 同 2.5.8 | 同 2.5.8（读不到） | 2026-11-05 从 2.5.8 升到 2.5.10 实测：`verify.sh` 六项全绿，增强文件和规则原样生效 |
 
 `$CFG` = `~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev`
 
@@ -25,12 +26,15 @@
 
 **没变的地方**（2.5.8 实测）：增强文件机制照旧（`profiles.yaml` 里订阅条目的 `option` 指向 uid 文件），GUI 点订阅卡片重新激活照旧，unix socket 不需要 secret。
 
+**2.5.9 / 2.5.10 实测没有新坑**（2026-11-05）。2.5.9 在虚拟网卡设置里新增了「DNS 模式」选项，对应内核的 `tun.dns-mode`；不去动它时生成配置里没有这个字段，`/configs` 里是空值，`dns.enhanced-mode: fake-ip` 照旧。**别为了这个选项改 DNS 设置**：fake-ip 是 UDP 连接也能认出域名的前提，改坏了域名规则会对 QUIC 失效。
+
 ## mihomo 内核
 
 | 能力 / 行为 | 版本 | 证据 |
 |---|---|---|
 | `PROCESS-NAME-REGEX` / `PROCESS-PATH-REGEX` 规则（模板③从 v1.2.2 起用到） | **≥ v1.18.5** 才支持 | mihomo 发布记录；v1.19.32 实测可用（2026-11-03：`/rules` 里加载为 `ProcessNameRegex` / `ProcessPathRegex`，重载后新建的 Claude Code 连接全部命中路径规则） |
 | 规则命中了，但目标节点不支持 UDP → **跳过这条继续往下匹配**；所有命中的规则都不支持 UDP → **不经任何规则直接 DIRECT**（`/connections` 里 `rule` 字段为空） | v1.19.32 实测 | 2026-11-02：Chrome 的 QUIC 因此从国内 IP 直连 claude.ai |
+| `tun.dns-mode`（Verge 2.5.9 起的「DNS 模式」）；同版还修了「重载配置时 fake-ip 分配状态丢失」和 crypto/tls 的 CVE-2026-97031 | v1.19.33 新增 | mihomo v1.19.33 发布记录；2026-11-05 实测：不设置时为空值，fake-ip 照旧，规则和进程/路径匹配行为不变 |
 | 进程名取的是**解析过符号链接的真实可执行文件**（`proc_pidpath`），不是 `ps` 显示的名字 | v1.19.32 实测 | 2026-11-02：Claude Code 在 `ps` 里叫 `claude`，在 mihomo 里叫 `2.1.316` |
 
 第二条行为决定了 QUIC 漏到哪：节点支持 UDP，就漏到机场默认节点（会话显示日本等地）；节点不支持 UDP（模板①的静态节点就是 `udp: false`，很多机场节点也是），就直连国内 IP，claude.ai 直接跳「App unavailable in region」。

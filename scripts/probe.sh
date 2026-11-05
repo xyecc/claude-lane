@@ -16,7 +16,7 @@
 CFG="${CLAUDE_LANE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev}"
 GEN="$CFG/clash-verge.yaml"
 LANE_MIN_MIHOMO="1.18.5"          # 模板③的 PROCESS-NAME-REGEX / PROCESS-PATH-REGEX 从这一版开始支持
-LANE_VERGE_VERIFIED="2.5.1 2.5.8" # 实机验证过的 Verge 版本（与 docs/compatibility.md 同步维护）
+LANE_VERGE_VERIFIED="2.5.1 2.5.8 2.5.9 2.5.10" # 实机验证过的 Verge 版本（与 docs/compatibility.md 同步维护）
 
 # socket 候选，按可信度排序
 lane_sock_candidates() {
