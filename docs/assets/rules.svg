@@ -7,7 +7,7 @@
   </defs>
   <rect width="1600" height="800" rx="16" fill="#F5F2EC" stroke="#D9D4CA" stroke-width="2"/>
   <text x="64" y="68" font-size="30" font-weight="700" fill="#1B1F23">templates/3-rules.yaml · 一条连接怎么被分层匹配</text>
-  <text x="64" y="100" font-size="16" fill="#57606A">从左到右逐层匹配，第一条命中即生效、未命中落到下一层；顺序敏感：QUIC 拦截必须在最前</text>
+  <text x="64" y="100" font-size="16" fill="#57606A">从左到右逐层匹配，第一条命中即生效、未命中落到下一层；顺序敏感：UDP 拦截必须在最前</text>
   <line x1="64" y1="124" x2="1536" y2="124" stroke="#D9D4CA" stroke-width="2"/>
 
   <!-- 入口 -->
@@ -20,12 +20,13 @@
   <rect x="190" y="160" width="250" height="270" rx="14" fill="#FDECEC" stroke="#C92A2A" stroke-width="2"/>
   <line x1="204" y1="208" x2="426" y2="208" stroke="#C92A2A" stroke-width="1" stroke-opacity="0.5"/>
   <text x="315" y="192" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">① QUIC / UDP 拦截</text>
-  <text x="204" y="238" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Google Chrome(*)</text>
-  <text x="204" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP + DST-PORT 443</text>
-  <text x="204" y="278" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  → REJECT</text>
-  <text x="204" y="298" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Claude / Helper(*)</text>
-  <text x="204" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude / claude.exe</text>
-  <text x="204" y="338" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP → REJECT</text>
+  <text x="204" y="232" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">Claude 域名 / Anthropic IP 段</text>
+  <text x="204" y="252" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP → REJECT（不分程序）</text>
+  <text x="204" y="276" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Google Chrome(*)</text>
+  <text x="204" y="296" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP + DST-PORT 443 → REJECT</text>
+  <text x="204" y="320" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS Claude / Helper(*) /</text>
+  <text x="204" y="340" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  claude / Claude Code 安装路径</text>
+  <text x="204" y="360" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  + UDP → REJECT</text>
   <text x="315" y="382" font-size="13" fill="#57606A" text-anchor="middle">排最前（prepend）</text>
   <text x="315" y="402" font-size="13" fill="#57606A" text-anchor="middle">拒掉后客户端无感回落 TCP</text>
   <line x1="442" y1="295" x2="464" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
@@ -37,9 +38,10 @@
   <text x="480" y="258" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME Claude Helper (*)</text>
   <text x="480" y="278" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude</text>
   <text x="480" y="298" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-NAME claude.exe</text>
-  <text x="480" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  → 策略组 Claude</text>
+  <text x="480" y="318" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">PROCESS-PATH …/claude/versions/</text>
+  <text x="480" y="338" font-size="11.5" font-family="'SF Mono', Menlo, Consolas, monospace" fill="#1B1F23" xml:space="preserve">  → 策略组 Claude</text>
   <text x="591" y="382" font-size="13" fill="#57606A" text-anchor="middle">最可靠：不受 DNS / IP 影响</text>
-  <text x="591" y="402" font-size="13" fill="#57606A" text-anchor="middle">CLI 的两个进程名都要写</text>
+  <text x="591" y="402" font-size="13" fill="#57606A" text-anchor="middle">Claude Code 按名字和安装路径都写</text>
   <line x1="718" y1="295" x2="740" y2="295" stroke="#4B5563" stroke-width="2.5" marker-end="url(#arrow)"/>
   <!-- ③ 域名兜底 -->
   <rect x="742" y="160" width="250" height="270" rx="14" fill="#FFF4DC" stroke="#C58A00" stroke-width="2"/>
@@ -86,6 +88,6 @@
   <text x="1419" y="596" font-size="18" font-weight="700" fill="#1B1F23" text-anchor="middle">机场订阅原有规则</text>
   <text x="1419" y="620" font-size="12" fill="#57606A" text-anchor="middle">日本 / 香港 / … 随订阅，不受影响</text>
 
-  <text x="800" y="712" font-size="16" fill="#1B1F23" text-anchor="middle">顺序不能动：QUIC 拦截必须 prepend 在最前。不要加全局 AND,((NETWORK,UDP),(DST-PORT,443)),REJECT —— 会废掉全机 HTTP/3。</text>
-  <text x="800" y="742" font-size="16" fill="#1B1F23" text-anchor="middle">用 Edge / Arc / Brave 的把第①层的进程名换成对应浏览器（模板注释里有对照表）；Safari 没有干净的进程级拦法。</text>
+  <text x="800" y="712" font-size="16" fill="#1B1F23" text-anchor="middle">顺序不能动：UDP 拦截必须 prepend 在最前。不要加全局 AND,((NETWORK,UDP),(DST-PORT,443)),REJECT —— 会废掉全机 HTTP/3。</text>
+  <text x="800" y="742" font-size="16" fill="#1B1F23" text-anchor="middle">第①层第一组按目的地拦（v1.2.3）：Safari / Edge / Arc / 以后改名的 Chrome 都兜得住，不用再逐个补进程名。</text>
 </svg>

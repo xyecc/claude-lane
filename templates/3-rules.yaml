@@ -2,9 +2,23 @@
 # 写入位置：$CFG/profiles/<订阅option里rules对应的uid>.yaml
 # 整体照抄，顺序敏感：QUIC 拦截必须排最前。没有占位符。
 # 注意：不含全局 "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT" —— 那会误伤全机 HTTP/3，
-#       已被下面的进程级拦截取代，不要自作主张加回去。
+#       已被下面「按目的地」和「按进程」的拦截取代，不要自作主张加回去。
 
 prepend:
+  # ── 0. 发往 Claude 的 UDP 一律拒绝，不管是哪个程序发的（v1.2.3 起，最根本的一道）
+  #    Claude 专线不支持 UDP（静态节点 udp:false），所以发往 Claude 的 UDP 只有两种结局：
+  #    被拒绝（程序自动回落 TCP，用起来没区别），或者被 mihomo 跳过所有规则、从国内 IP 直连（2026-11-02 的事故）。
+  #    下面第 1、2 节按进程名拦，程序一改名就失效；这几条按目的地拦，跟程序叫什么无关，
+  #    Safari / Edge / Arc / 以后再改名的 Chrome 都兜得住。只针对 Claude 的地址，其他网站的 HTTP/3 照常。
+  #    前提：DNS 是 fake-ip 模式（Clash Verge 默认），UDP 连接才认得出域名；认不出时由 IP 段那条兜底。
+  #    和第 4、5 节的导流规则一一对应：以后加了新的 Claude 域名，这里也要加一条。
+  - "AND,((DOMAIN-SUFFIX,anthropic.com),(NETWORK,UDP)),REJECT"
+  - "AND,((DOMAIN-SUFFIX,claude.ai),(NETWORK,UDP)),REJECT"
+  - "AND,((DOMAIN-SUFFIX,claude.com),(NETWORK,UDP)),REJECT"
+  - "AND,((DOMAIN-SUFFIX,claudeusercontent.com),(NETWORK,UDP)),REJECT"
+  - "AND,((DOMAIN-KEYWORD,anthropic),(NETWORK,UDP)),REJECT"
+  - "AND,((IP-CIDR,160.79.104.0/23,no-resolve),(NETWORK,UDP)),REJECT"
+
   # ── 1. Chrome 的 QUIC（UDP/443）会绕过域名规则漏出去，拒绝后无感回落 TCP
   #    漏到哪取决于节点支不支持 UDP：支持 → 漏到机场默认节点（实测显示日本）；
   #    不支持（静态节点 udp:false、很多机场节点也是）→ mihomo 跳过所有规则直接 DIRECT →
@@ -13,12 +27,12 @@ prepend:
   #    （Chrome 156 起网络进程叫「Google Chrome Helper (Aperitif)」，旧的精确名规则静默失效）。
   #    PROCESS-NAME-REGEX 需要 mihomo ≥ v1.18.5。各版本进程名见 docs/compatibility.md
   - "AND,((PROCESS-NAME-REGEX,^Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT"
-  # ⚠️ 这里只拦了 Google Chrome（含 Beta / Canary）。其他 Chromium 系浏览器 QUIC 同样会漏，
-  #    用的话照抄上面这条、把正则换成（verify.sh 第 3 项发现它们在跑却没拦会黄色提醒）：
+  #    v1.2.3 起第 0 节已按目的地兜住所有浏览器，这条留作第二道保险（比如 Chrome 开了「安全 DNS」、
+  #    绕过 Clash 自己解析域名时，第 0 节的域名条件认不出来，还有这条和 IP 段那条）。
+  #    其他 Chromium 系浏览器想要同样的第二道保险，照抄这条、把正则换成：
   #      Edge:  ^Microsoft Edge
   #      Brave: ^Brave Browser
   #      Arc:   ^Arc( Helper.*)?$
-  #    Safari 的网络请求走系统进程，没有干净的进程级拦法；用 Safari 出现漏流就换浏览器访问 claude.ai。
 
   # ── 2. Claude 桌面版全家的 UDP 同理拒绝，强制走 TCP
   - "AND,((PROCESS-NAME,Claude Helper),(NETWORK,UDP)),REJECT"

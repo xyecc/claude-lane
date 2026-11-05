@@ -4,3 +4,4 @@
 .env
 .mirror-work/
 docs/internal/
+__pycache__/

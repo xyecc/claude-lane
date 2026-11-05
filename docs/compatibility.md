@@ -34,6 +34,8 @@
 |---|---|---|
 | `PROCESS-NAME-REGEX` / `PROCESS-PATH-REGEX` 规则（模板③从 v1.2.2 起用到） | **≥ v1.18.5** 才支持 | mihomo 发布记录；v1.19.32 实测可用（2026-11-03：`/rules` 里加载为 `ProcessNameRegex` / `ProcessPathRegex`，重载后新建的 Claude Code 连接全部命中路径规则） |
 | 规则命中了，但目标节点不支持 UDP → **跳过这条继续往下匹配**；所有命中的规则都不支持 UDP → **不经任何规则直接 DIRECT**（`/connections` 里 `rule` 字段为空） | v1.19.32 实测 | 2026-11-02：Chrome 的 QUIC 因此从国内 IP 直连 claude.ai |
+| `AND` 里组合「域名 / IP 段 + `NETWORK,UDP`」（模板③第 0 节，按目的地拒绝 UDP）；`IP-CIDR` 子规则可带 `no-resolve` | v1.19.33 实测可用 | 2026-11-05：`verge-mihomo -t` 语法检查通过，`/rules` 里显示为 `((DomainSuffix,claude.ai) && (Network,udp))`、`((IPCIDR,160.79.104.0/23) && (Network,udp))`。UDP 连接靠 fake-ip 认出域名。GUI 激活后实测：非 Chrome 程序发往 `claude.ai:443` 和 `160.79.104.10:443` 的 UDP 分别命中这两条并被 REJECT |
+| `/rules` 每条规则带 `extra.hitCount` / `missCount` | v1.19.33 有 | 2026-11-05 实测：不读日志也能确认某条规则真的命中过 |
 | `tun.dns-mode`（Verge 2.5.9 起的「DNS 模式」）；同版还修了「重载配置时 fake-ip 分配状态丢失」和 crypto/tls 的 CVE-2026-97031 | v1.19.33 新增 | mihomo v1.19.33 发布记录；2026-11-05 实测：不设置时为空值，fake-ip 照旧，规则和进程/路径匹配行为不变 |
 | 进程名取的是**解析过符号链接的真实可执行文件**（`proc_pidpath`），不是 `ps` 显示的名字 | v1.19.32 实测 | 2026-11-02：Claude Code 在 `ps` 里叫 `claude`，在 mihomo 里叫 `2.1.316` |
 
@@ -45,10 +47,11 @@
 |---|---|---|
 | 2026-07 时的版本 | `Google Chrome Helper` | 2026-07 部署实测（当时 `/connections` 里就是这个名字） |
 | **156.0.8078.49** | **`Google Chrome Helper (Aperitif)`**（另有 `(Aperitif Renderer)` / `(Aperitif GPU)` / `(Aperitif Alerts)`） | 2026-11-02 实测 |
+| 156.0.8078.80 | 同上，仍是 `(Aperitif)` 系列 | 2026-11-05 重启 Chrome 后实测 |
 
 **不能按版本号预测。** Chrome 156 的安装包里两套 Helper 都有：日常使用的 Chrome 实例走 `(Aperitif)` 系列；同一台机器上被自动化工具单独拉起的另一个实例（156.0.8078.74）走的是普通 `Google Chrome Helper`。这更像灰度实验，而不是版本切换。所以模板③从 v1.2.2 起改用 `PROCESS-NAME-REGEX,^Google Chrome`，覆盖所有以它开头的进程（含 Beta / Canary）。`verify.sh` 第 3 项会拿**此刻在跑的** Chrome 进程逐个去对规则。
 
-**其他浏览器（均未实测）**：Edge `^Microsoft Edge`、Brave `^Brave Browser`、Arc `^Arc( Helper.*)?$`。它们在跑却没有拦截规则时，`verify.sh` 会黄色提醒。Safari 的网络请求走系统进程，没法按进程拦截。
+**其他浏览器**：v1.2.3 起模板③第 0 节**按目的地**拒绝发往 Claude 的 UDP，跟浏览器叫什么无关，Safari（网络请求走系统进程 `com.apple.WebKit.Networking`，没法按进程拦）、Edge、Brave、Arc 都兜得住。想给它们再加一道按进程的保险，正则分别是 Edge `^Microsoft Edge`、Brave `^Brave Browser`、Arc `^Arc( Helper.*)?$`（均未实测）。
 
 ## Claude Code
 

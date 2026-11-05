@@ -6,7 +6,22 @@
 
 ---
 
-## 未发布（不 bump `VERSION`：已部署的机器不需要重新对齐）
+## v1.2.3 — 2026-11-05（加固，建议每台机器都重新对齐）
+
+**加固：发往 Claude 的 UDP 一律拒绝，不管是哪个程序发的。** 这条专线不支持 UDP（静态节点 `udp: false`），所以发往 Claude 的 UDP 只有两种结局：被拒绝后程序自动改用 TCP，或者被 mihomo 跳过所有规则、从国内 IP 直连（v1.2.2 修的就是后一种事故）。v1.2.2 只按程序名拦了 Chrome 和 Claude 自己，换 Safari / Edge / Arc 打开 claude.ai，或者下次哪个程序再改名，照样会漏。
+
+- 模板③最前面新增**第 0 节**：anthropic.com、claude.ai、claude.com、claudeusercontent.com、含 anthropic 的域名、Anthropic IP 段 160.79.104.0/23，各一条「目的地 + UDP → REJECT」。只针对 Claude 的地址，其他网站的 HTTP/3 不受影响；用起来没有区别（浏览器本来就是 QUIC 和 TCP 同时试，QUIC 不通就用 TCP）。前提是 DNS 用 fake-ip（Clash Verge 默认），UDP 连接才认得出域名，认不出时由 IP 段那条兜底。原来按程序名的拦截保留，作为第二道保险
+- `verify.sh` 第 3 项新增核对：这一组规则是否齐全、是否排在所有 Claude 导流规则前面。有了它，Edge / Brave / Arc 在跑也不再黄色提醒
+- `verify.sh` 第 5 项（`lanecheck.py conns`）：任何程序发往 Claude 的 UDP 都会被识别为漏流，只有 IP 没有域名的连接也按 Anthropic IP 段认出来
+- 修了一处误判：按 IP 段拦 UDP 的规则曾被当成「全局 UDP/443 拦截」报红
+- README 的分层规则图、排障手册第 2 条、移植规格等同步更新；`docs/iphone-notes.md` 加了手机上自查 QUIC 漏流的方法
+- `selftest.sh` 新增第 15 组（7 项），用例 60 → **67**。旧版判定脚本跑这组 7 条失败 6 条，剩下一条是「没加固时 Edge 在跑要提醒」，用来确认原有行为没被改坏
+- 新规则先用本机内核 `verge-mihomo -t`（v1.19.33）离线检查语法，并用故意写错的反例确认这个检查会报错
+- 实机验证（2026-11-05，Clash Verge 2.5.10 + mihomo v1.19.33）：GUI 激活后，用一个不是 Chrome 也不是 Claude 的程序向 claude.ai 和 Anthropic IP 各发一个空的 UDP 测试包，分别命中第 0 节的域名规则和 IP 段规则并被 REJECT（`/rules` 命中次数 0 → 1，实时日志对得上）；`verify.sh --save-baseline` 六项全绿
+
+**已部署的机器**：按 `CLAUDE.md`「已部署的机器：升级对齐」把第 0 节补到 rules 文件最前面，GUI 激活后跑 `verify.sh --save-baseline`。
+
+**同版一起发布的改动：**
 
 - **Clash Verge 2.5.9 / 2.5.10（mihomo v1.19.33）实测兼容**（2026-11-05 从 2.5.8 升到 2.5.10）：socket、日志位置和 2.5.8 相同，增强文件和规则原样生效，`verify.sh` 六项全绿。2.5.9 新增的「DNS 模式」选项不设置时不影响 fake-ip。已记入 `docs/compatibility.md`，`probe.sh` 不再对这两个版本报「没有实测记录」
 - `verify.sh` 第 4 项：claude.ai 请求**最多试 3 次**，连续失败才报红；重试后才成功的，提示「线路有偶发断连」。起因：2026-11-05 实测静态 IP 线路约 1/8 的请求在 TLS 握手时被断，单次失败就报「出口变了：请求失败」，属于误报。单次超时 25 秒 → 15 秒

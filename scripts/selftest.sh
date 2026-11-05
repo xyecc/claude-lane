@@ -260,6 +260,12 @@ OUT=$(python3 "$LC" rules "$HERE/../templates/3-rules.yaml" --ps "$T10/ps-all.tx
 # 进程名自带括号的 API 写法要能正确拆开
 cat > "$T10/paren.json" <<'EOF'
 {"rules":[
+ {"type":"AND","payload":"((DomainSuffix,anthropic.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.ai) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claudeusercontent.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainKeyword,anthropic) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((IPCIDR,160.79.104.0/23) && (Network,udp))","proxy":"REJECT"},
  {"type":"AND","payload":"((ProcessNameRegex,^Google Chrome) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
  {"type":"AND","payload":"((ProcessName,Claude Helper (GPU)) && (Network,udp))","proxy":"REJECT"},
  {"type":"ProcessName","payload":"Claude Helper (GPU)","proxy":"Claude"},
@@ -358,6 +364,49 @@ echo "$OUT" | grep -q '与基线一致' && echo "$OUT" | grep -q '第 2 次请�
 OUT=$(run14 9); N=$(cat "$SANDBOX/claude.count" 2>/dev/null)
 echo "$OUT" | grep -q '请求失败（试了 3 次）' && [ "$N" = 3 ] \
   && ok "一直失败 → 试满 3 次后报红" || ng "一直失败时没有试满 3 次再报红（请求了 ${N:-0} 次）"
+
+echo "[15] 按目的地拒绝发往 Claude 的 UDP（v1.2.3）：不管哪个程序、叫什么名字都拦住"
+T15="$SANDBOX/t15"; mkdir -p "$T15"
+OUT=$(python3 "$LC" rules "$T10/old-api.json" --ps "$T10/ps-aperitif.txt" 2>&1)
+printf '%s' "$OUT" | grep -q '没有按目的地拒绝' && printf '%s' "$OUT" | grep -q '160.79.104.0/23' \
+  && ok "只靠进程名拦截的旧规则（v1.2.2 及以前）会报红" || ng "缺按目的地拦截没被发现：${OUT}"
+OUT=$(python3 "$LC" rules "$T10/paren.json" --ps "$T10/ps-gpu.txt" 2>&1)
+printf '%s' "$OUT" | grep -q '^OK 发往 Claude 的 UDP' && printf '%s' "$OUT" | grep -q '^OK 无全局' \
+  && ok "API 写法（DomainSuffix / IPCIDR）认得出，且不会被误判成全局 UDP 拦截" || ng "API 写法的按目的地拦截没认出来：${OUT}"
+cat > "$T15/late.json" <<'EOF'
+{"rules":[
+ {"type":"DomainSuffix","payload":"claude.ai","proxy":"Claude"},
+ {"type":"AND","payload":"((DomainSuffix,anthropic.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.ai) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claudeusercontent.com) && (Network,udp))","proxy":"REJECT"},
+ {"type":"AND","payload":"((IPCIDR,160.79.104.0/23) && (Network,udp))","proxy":"REJECT"}]}
+EOF
+OUT=$(python3 "$LC" rules "$T15/late.json" --ps /dev/null 2>&1)
+printf '%s' "$OUT" | grep -q '按目的地的 UDP 拒绝排在' && ok "按目的地拦截排在 Claude 导流后面会报红" || ng "没发现顺序错误：${OUT}"
+cat > "$T15/port.json" <<'EOF'
+{"rules":[
+ {"type":"AND","payload":"((DomainSuffix,anthropic.com) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.ai) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claude.com) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((DomainSuffix,claudeusercontent.com) && (Network,udp) && (DstPort,443))","proxy":"REJECT"},
+ {"type":"AND","payload":"((IPCIDR,160.79.104.0/23) && (Network,udp) && (DstPort,443))","proxy":"REJECT"}]}
+EOF
+OUT=$(python3 "$LC" rules "$T15/port.json" --ps /dev/null 2>&1)
+printf '%s' "$OUT" | grep -q '没有按目的地拒绝' && ok "只拦 UDP/443 不算数（其他端口的 UDP 照样会直连）" || ng "带端口条件的拦截被误当成完整：${OUT}"
+printf 'Microsoft Edge Helper\t/Applications/Microsoft Edge.app/x/Microsoft Edge Helper\n' > "$T15/ps-edge.txt"
+OUT=$(python3 "$LC" rules "$T10/paren.json" --ps "$T15/ps-edge.txt" 2>&1)
+! printf '%s' "$OUT" | grep -q '^WARN.*Edge' && ok "有按目的地拦截时，Edge 在跑不再误报" || ng "有按目的地拦截时 Edge 仍被提醒：${OUT}"
+OUT=$(python3 "$LC" rules "$T10/old-api.json" --ps "$T15/ps-edge.txt" 2>&1)
+printf '%s' "$OUT" | grep -q '^WARN.*Edge' && ok "没有按目的地拦截时，Edge 在跑会提醒" || ng "没有按目的地拦截时 Edge 没被提醒：${OUT}"
+cat > "$T15/udp-leak.json" <<'EOF'
+{"connections":[
+ {"metadata":{"network":"udp","host":"claude.ai","destinationPort":"443","process":"com.apple.WebKit.Networking"},"rule":"","chains":["DIRECT"]},
+ {"metadata":{"network":"udp","host":"","destinationIP":"160.79.104.10","destinationPort":"3478","process":"Some App"},"rule":"","chains":["DIRECT"]}]}
+EOF
+OUT=$(python3 "$LC" conns "$T15/udp-leak.json" 2>&1); RC=$?
+[ "$RC" = "1" ] && [ "$(printf '%s\n' "$OUT" | grep -c '发往 Claude 的 UDP 没被拒绝')" = 2 ] \
+  && ok "非 Chrome 程序（Safari 等）发往 Claude 的 UDP 漏流、只有 IP 没有域名的也能抓到" || ng "没抓到非 Chrome 的 UDP 漏流：${OUT}"
 
 echo
 if [ "$FAIL" -eq 0 ]; then

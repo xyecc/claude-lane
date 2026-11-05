@@ -52,14 +52,14 @@ curl -s --unix-socket "$SOCK" http://localhost/connections | python3 scripts/lan
 ```
 
 **处理**：
-1. 规则最前面换成模板③的正则那条：`AND,((PROCESS-NAME-REGEX,^Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT`。需要 mihomo ≥ v1.18.5（`bash scripts/probe.sh` 会查）。
+1. 规则最前面补上模板③第 0 节（v1.2.3 起）：发往 Claude 域名和 Anthropic IP 段的 UDP 一律拒绝，不管是哪个程序发的，例如 `AND,((DOMAIN-SUFFIX,claude.ai),(NETWORK,UDP)),REJECT`。Chrome 那条换成正则：`AND,((PROCESS-NAME-REGEX,^Google Chrome),(NETWORK,UDP),(DST-PORT,443)),REJECT`。需要 mihomo ≥ v1.18.5（`bash scripts/probe.sh` 会查）。
 2. GUI 点一下订阅卡片重新激活。激活时内核会断掉已有连接，一般不重启 Chrome 也能生效；稳妥起见还是 ⌘Q 重开一次。
 3. 跑 `verify.sh`，第 3、5 项要全绿。
 4. 到 claude.ai 设置里**撤销**漏流期间产生的、归属地不对的会话，然后重新登录。
 
-**不要**用全局 `AND,((NETWORK,UDP),(DST-PORT,443)),REJECT` 来防漏。它会禁掉全机所有应用的 HTTP/3，iCloud/Apple 服务全遭殃。进程级拦截才是对的粒度。
+**不要**用全局 `AND,((NETWORK,UDP),(DST-PORT,443)),REJECT` 来防漏。它会禁掉全机所有应用的 HTTP/3，iCloud/Apple 服务全遭殃。粒度要限定在 Claude 的目的地（第 0 节）或特定进程。
 
-**用的不是 Chrome？** Edge / Arc / Brave 等 Chromium 系浏览器症状完全相同。把模板③最前面那条照抄，正则换成对应浏览器的（模板③注释里有对照表）。这些浏览器在跑却没有拦截规则时，`verify.sh` 第 3 项会黄色提醒。
+**用的不是 Chrome？** Safari / Edge / Arc / Brave 症状完全相同。v1.2.3 起模板③第 0 节按目的地拦，这些浏览器都兜得住；还停在 v1.2.2 及以前的，按 `CLAUDE.md`「已部署的机器：升级对齐」补上第 0 节。`lanecheck.py conns` 会报「发往 Claude 的 UDP 没被拒绝」，后面跟着是哪个程序发的。
 
 ## 3. 直连测试 静态 IP 失败：`Can't complete SOCKS5 connection`
 

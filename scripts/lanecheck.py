@@ -6,6 +6,7 @@
   · 2026-11-02：Chrome 156 的网络进程改名为「Google Chrome Helper (Aperitif)」，
     精确名的 QUIC 拦截规则失效 → QUIC 不经规则直连（节点全是 udp:false）→ 国内 IP → claude.ai 报地区不可用；
     同一天还发现 Claude Code 原生安装版的进程名变成了版本号（如 2.1.316），进程规则同样失效
+  · 所以 v1.2.3 起模板③最前面改为「按目的地」拒绝发往 Claude 的 UDP，不再只靠进程名；这里也核对它
 这类坑只能靠"拿真实进程名/真实连接去对规则"来发现，所以逻辑放这里，能被测试覆盖。
 各版本的进程名、路径差异记录在 docs/compatibility.md。
 
@@ -17,6 +18,7 @@
   --ps FILE：每行「进程名<TAB>完整路径」，用来代替读本机 ps（测试用）
 输出每行以 OK / NG / WARN / NOTE 开头；有 NG 时退出码 1。
 """
+import ipaddress
 import json
 import re
 import subprocess
@@ -28,12 +30,15 @@ KNOWN_CHROME = ["Google Chrome", "Google Chrome Helper", "Google Chrome Helper (
 CC_PATH = re.compile(r"/\.local/share/claude/versions/[^/]+$")
 CLAUDE_DOMAINS = ("anthropic.com", "claude.ai", "claude.com", "claudeusercontent.com")
 TELEMETRY_HOST = "http-intake.logs.us5.datadoghq.com"
+ANTHROPIC_CIDR = "160.79.104.0/23"
+# 发往这些地址的 UDP 必须按目的地拒绝（模板③第 0 节）：Claude 专线不支持 UDP，不拒就会直连国内 IP
+DEST_UDP = CLAUDE_DOMAINS + (ANTHROPIC_CIDR,)
 
 ALIASES = {
     "processname": "PROCESS-NAME", "processnameregex": "PROCESS-NAME-REGEX",
     "processpath": "PROCESS-PATH", "processpathregex": "PROCESS-PATH-REGEX",
     "domainsuffix": "DOMAIN-SUFFIX", "domain": "DOMAIN", "domainkeyword": "DOMAIN-KEYWORD",
-    "network": "NETWORK", "dstport": "DST-PORT",
+    "network": "NETWORK", "dstport": "DST-PORT", "ipcidr": "IP-CIDR",
 }
 PROC_KINDS = ("PROCESS-NAME", "PROCESS-NAME-REGEX", "PROCESS-PATH", "PROCESS-PATH-REGEX")
 
@@ -147,6 +152,20 @@ def blocks_udp443(rule, name, path):
     return all(cond_matches(p, name, path) for p in procs)
 
 
+def rejects_udp_to(rule, dest):
+    """这条规则是不是「发往 dest 的 UDP 一律拒绝」，不带任何进程 / 端口条件"""
+    kind, conds, target = rule
+    if kind != "AND" or target.upper() != "REJECT":
+        return False
+    nets = [c for c in conds if c[0] == "NETWORK"]
+    dsts = [c for c in conds if c[0] in ("DOMAIN-SUFFIX", "DOMAIN", "IP-CIDR")]
+    if len(dsts) != 1 or not nets or len(nets) + len(dsts) != len(conds):
+        return False
+    if not all(n[1].lower() == "udp" for n in nets):
+        return False
+    return dsts[0][1].split(",")[0].strip() == dest   # 配置写法带 ",no-resolve"，API 写法不带
+
+
 def routes_to_claude(rule, name, path):
     kind, conds, target = rule
     return target == "Claude" and kind in PROC_KINDS and cond_matches(conds[0], name, path)
@@ -219,6 +238,23 @@ def check_rules(rules, procs):
             return "missing"
         return "ok" if i < limit else "late"
 
+    # ⓪ 按目的地拦截 UDP（最根本的一道：跟程序叫什么无关）
+    miss, late = [], []
+    for d in DEST_UDP:
+        i = first_index(rules, lambda r: rejects_udp_to(r, d))
+        if i is None:
+            miss.append(d)
+        elif i >= limit:
+            late.append(d)
+    if miss:
+        say("NG", "发往这些 Claude 地址的 UDP 没有按目的地拒绝（换个浏览器、程序一改名就会从国内 IP 直连）: %s"
+            " —— 用模板③第 0 节" % miss)
+    if late:
+        say("NG", "这些按目的地的 UDP 拒绝排在 Claude 分流规则后面（必须在最前）: %s" % late)
+    dest_ok = not miss and not late
+    if dest_ok:
+        say("OK", "发往 Claude 的 UDP 不论哪个程序发都会被拒绝（按目的地拦截）")
+
     # ① 浏览器 QUIC 拦截：已知的 Chrome 进程名 + 此刻真实在跑的浏览器进程，逐个对规则
     browsers = {}
     for n in KNOWN_CHROME:
@@ -245,13 +281,13 @@ def check_rules(rules, procs):
         running = sorted(n for n, (p, b) in browsers.items() if b == "Chrome" and p)
         say("OK", "Chrome QUIC 拦截覆盖所有已知/在跑的 Chrome 进程%s"
             % ("（在跑: %s）" % ", ".join(running) if running else ""))
-    if bad_other:
+    if bad_other and not dest_ok:
         say("WARN", "这些在跑的浏览器没有 QUIC 拦截，用它们开 claude.ai 会漏: %s —— 照模板③注释里的对照表补一条" % bad_other)
 
-    # ② 不能有全局 UDP/443 拦截（误伤全机 HTTP/3）
+    # ② 不能有全局 UDP/443 拦截（误伤全机 HTTP/3）：只有协议/端口条件、没有限定程序或目的地的才算全局
     glb = [r for r in rules if r[0] == "AND" and r[2].upper() == "REJECT"
-           and any(c == ("NETWORK", "udp") or c == ("NETWORK", "UDP") for c in r[1])
-           and not any(c[0] in PROC_KINDS or c[0].startswith("DOMAIN") for c in r[1])]
+           and any(c[0] == "NETWORK" and c[1].lower() == "udp" for c in r[1])
+           and all(c[0] in ("NETWORK", "DST-PORT") for c in r[1])]
     if glb:
         say("NG", "存在全局 UDP/443 REJECT（误伤全机 HTTP/3，应删除）")
     else:
@@ -291,8 +327,12 @@ def check_rules(rules, procs):
 
 def is_claude_host(host):
     h = (host or "").lower().rstrip(".")
+    try:   # 只有 IP、没有域名的连接（浏览器自己解析了 DNS 时会这样）按 Anthropic IP 段认
+        in_cidr = ipaddress.ip_address(h) in ipaddress.ip_network(ANTHROPIC_CIDR)
+    except ValueError:
+        in_cidr = False
     return (any(h == d or h.endswith("." + d) for d in CLAUDE_DOMAINS)
-            or "anthropic" in h or h == TELEMETRY_HOST)
+            or "anthropic" in h or h == TELEMETRY_HOST or in_cidr)
 
 
 def check_conns(data):
@@ -307,6 +347,8 @@ def check_conns(data):
         why = None
         if net == "udp" and port == "443" and browser_of(name) == "Chrome":
             why = "Chrome 的 QUIC 没被拦截"
+        elif net == "udp" and is_claude_host(host):
+            why = "发往 Claude 的 UDP 没被拒绝"
         elif net == "udp" and is_claude_proc(name, path):
             why = "Claude 进程的 UDP 没被拒绝"
         elif is_claude_host(host) or is_claude_proc(name, path):

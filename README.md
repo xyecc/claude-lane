@@ -23,7 +23,7 @@
 
 ![规则：一条连接怎么被分层匹配](docs/assets/rules.svg)
 
-**QUIC 拦截是干嘛的？** Chrome 会用 UDP 的 QUIC 协议直连，绕过域名识别导致漏流（实测会漏到日本节点）。把 Chrome 的 QUIC 拒掉，它会无感回落到 TCP，就能被规则抓住了——所以图里第①层必须排最前。
+**UDP 拦截是干嘛的？** 浏览器会用跑在 UDP 上的 QUIC 协议连 claude.ai，而这条专线不支持 UDP：没拦住的 UDP 会被 Clash 跳过所有规则、从国内 IP 直连（2026-11 实测 claude.ai 因此直接跳「地区不可用」）。所以发往 Claude 的 UDP 一律拒掉，浏览器会自动改用 TCP，体验没区别——图里第①层必须排最前。v1.2.3 起这一层**按目的地**拦（不管哪个程序、叫什么名字），Safari / Edge 也兜得住。
 
 ## 怎么做
 
@@ -99,7 +99,7 @@ bash scripts/verify.sh
 == Claude 专线验证 ==
 [1/6] 内核与 TUN          ✅ mihomo API 可达  ✅ TUN 已接管路由
 [2/6] 策略组状态          ✅ Claude 组 → 🇺🇸 US-Static  ✅ US-Chain 组 → 🇺🇸 美国节点 03
-[3/6] 规则完整性          ✅ Chrome QUIC 拦截覆盖在跑的进程  ✅ 在跑的 Claude 进程都有规则  ✅ 遥测域名规则存在
+[3/6] 规则完整性          ✅ 发往 Claude 的 UDP 按目的地拒绝  ✅ Chrome QUIC 拦截覆盖在跑的进程  ✅ 在跑的 Claude 进程都有规则  ✅ 遥测域名规则存在
 [4/6] 出口双验（关键）
   ✅ claude.ai 出口 = 198.51.100.10 (US) <- 与基线一致
   ✅ 普通流量出口 = 203.0.113.55 <- 机场节点, 未误走静态
@@ -139,7 +139,7 @@ bash scripts/verify.sh
 | `scripts/lanecheck.py` | 规则覆盖 / 实时连接漏流判定（verify.sh 调用，也可单独用来排查） |
 | `scripts/set-credentials.sh` | 本地隐藏输入写凭证，不经过 AI 对话 |
 | `scripts/backup.sh` / `rollback.sh` | 按次备份 / 精确回滚某次部署（新建的文件会被删除） |
-| `scripts/selftest.sh` | 烟雾测试 60 项（沙箱跑，改脚本后先跑它） |
+| `scripts/selftest.sh` | 烟雾测试 67 项（沙箱跑，改脚本后先跑它） |
 | `docs/manual-setup.md` | 人肉版部署手册（不用 agent 的等价流程） |
 | `docs/troubleshooting.md` | 排障手册（14 个真实踩过的坑） |
 | `docs/compatibility.md` | 版本兼容记录：Clash Verge / mihomo / Chrome / Claude 各版本的路径与进程名差异（升级后出怪事先看它） |

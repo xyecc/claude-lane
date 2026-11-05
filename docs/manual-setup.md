@@ -66,7 +66,7 @@ bash scripts/backup.sh "$CFG/profiles/<proxies的uid>.yaml" "$CFG/profiles/<grou
 |---|---|---|
 | `1-proxies.yaml` | proxies 的 uid 文件 | **别手填**：跑 `bash scripts/set-credentials.sh`（密码隐藏输入、自动定位文件、自动备份）。执意手填的话 **`type: socks5`、`udp: false`、`dialer-proxy: "US-Chain"` 三样一个都不能动** |
 | `2-groups.yaml` | groups 的 uid 文件 | `US-Chain` 里填第 0 步记下的美国节点名，**逐字一致** |
-| `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（QUIC 拦截必须最前）；正则 / 路径规则别改回精确进程名（见 `docs/compatibility.md`） |
+| `3-rules.yaml` | rules 的 uid 文件 | 整体照抄，**顺序不能动**（UDP 拦截必须最前）；正则 / 路径规则别改回精确进程名（见 `docs/compatibility.md`） |
 | `4-merge.yaml` | merge 的 uid 文件 | sniffer 段照抄（文件里已有别的顶层配置就保留、追加） |
 
 ## 第 4 步：激活

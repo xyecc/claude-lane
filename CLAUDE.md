@@ -102,7 +102,7 @@ bash scripts/backup.sh "$CFG/profiles.yaml" \
 
 1. `templates/1-proxies.yaml` → proxies 文件：**这个文件由用户跑 `scripts/set-credentials.sh` 写，你不要自己填凭证**。已经跑过就跳过，只核对结果：`grep -c 'US-Static' "$CFG/profiles/<proxies uid>.yaml"`，以及 `type: socks5` / `udp: false` / `dialer-proxy: "US-Chain"` 三项在不在（**一个都不能少**）
 2. `templates/2-groups.yaml` → groups 文件：US-Chain 里填 Phase 1 确认的真实美国节点名（**必须和订阅里的名字逐字一致，含 emoji 和空格**）
-3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（QUIC 拦截必须在最前）。它已经覆盖了 Chrome（正则匹配，能扛住 Helper 改名）、Claude 桌面版全家，以及 Claude Code（按名字 `claude` / `claude.exe`，外加按安装路径匹配原生安装版的版本号进程名）。**不要把正则规则改回精确名**，原因见 `docs/compatibility.md`。写入后可以先离线核对一次：`python3 scripts/lanecheck.py rules "$CFG/profiles/<rules uid>.yaml"`（会拿本机在跑的进程逐个对规则）
+3. `templates/3-rules.yaml` → rules 文件：整体照抄，**规则顺序不能动**（UDP 拦截必须在最前）。最前面一组按目的地拒绝发往 Claude 的 UDP，不管是哪个程序发的（v1.2.3 起，程序改名也不怕）；后面的进程级拦截覆盖了 Chrome（正则匹配，能扛住 Helper 改名）、Claude 桌面版全家，以及 Claude Code（按名字 `claude` / `claude.exe`，外加按安装路径匹配原生安装版的版本号进程名）。**不要把正则规则改回精确名**，原因见 `docs/compatibility.md`。写入后可以先离线核对一次：`python3 scripts/lanecheck.py rules "$CFG/profiles/<rules uid>.yaml"`（会拿本机在跑的进程逐个对规则）
 4. `templates/4-merge.yaml` → merge 文件：sniffer 段照抄（若用户 merge 文件里已有其他顶层配置，保留并追加 sniffer 段）
 
 **不要默认加支付规则**：`templates/optional-payment-rules.yaml` 默认不启用（副作用是任何网站的 Stripe/Google Pay 付款都走静态 IP，且 Claude 订阅本来就不收中国大陆发行的卡）。只有用户主动提出"想让订阅付款也走这条线"才加，加之前把副作用讲清楚。
